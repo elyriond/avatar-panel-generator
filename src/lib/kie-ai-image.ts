@@ -1,6 +1,6 @@
 /**
  * KIE.AI Image Generation Library
- * Verwendet Nano Banana Pro (Google Imagen 3) für Character-konsistente Comic-Avatars
+ * Verwendet Nano Banana Pro (Google Imagen 4) für Character-konsistente Comic-Avatars
  */
 
 import { logger } from './logger'
@@ -381,15 +381,15 @@ async function urlToBase64(url: string): Promise<string> {
  * Generiert einen Comic-Avatar mit Character Consistency
  *
  * @param prompt - Detaillierte Szenen-Beschreibung
- * @param referenceImages - Base64-kodierte Referenzbilder (max 8)
+ * @param referenceImages - Base64-kodierte Referenzbilder ODER URLs (max 8)
  * @param onProgress - Optional: Progress-Callback
- * @returns Base64-kodiertes generiertes Bild
+ * @returns Objekt mit Base64-kodiertem Bild und der Original-URL
  */
 export async function generateComicAvatar(
   prompt: string,
   referenceImages: string[],
   onProgress?: (progress: number, status: string) => void
-): Promise<string> {
+): Promise<{ base64: string, url: string }> {
   logger.info('Starte Comic-Avatar-Generierung', {
     component: 'KieAiImage',
     data: {
@@ -404,21 +404,29 @@ export async function generateComicAvatar(
       throw new Error('Mindestens ein Referenzbild erforderlich')
     }
 
-    if (referenceImages.length > 8) {
-      logger.warn('Zu viele Referenzbilder, nutze nur die ersten 8', {
-        component: 'KieAiImage',
-        data: { count: referenceImages.length }
-      })
-      referenceImages = referenceImages.slice(0, 8)
+    // SICHERHEIT: Alle Base64-Referenzen zu imgbb hochladen
+    const base64ImagesToUpload = referenceImages.filter(img => img.startsWith('data:') || (img.length > 500 && !img.startsWith('http')))
+    const existingUrls = referenceImages.filter(img => img.startsWith('http'))
+    
+    let finalReferenceUrls = [...existingUrls]
+    
+    if (base64ImagesToUpload.length > 0) {
+      logger.info(`Lade ${base64ImagesToUpload.length} neue Referenzbilder zu imgbb hoch...`)
+      const newUrls = await uploadImagesToImgbb(base64ImagesToUpload)
+      finalReferenceUrls = [...newUrls, ...finalReferenceUrls]
+    }
+
+    if (finalReferenceUrls.length > 8) {
+      finalReferenceUrls = finalReferenceUrls.slice(0, 8)
     }
 
     // 1. Task erstellen
     const taskResponse = await createImageTask({
       prompt,
-      referenceImages,
+      referenceImages: finalReferenceUrls,
       aspectRatio: '1:1',
       resolution: '1K',
-      outputFormat: 'jpg',  // JPG mit 80% Qualität (siehe createImageTask)
+      outputFormat: 'jpg',
       negativePrompt: 'realistic photo, photograph, 3d render, ugly, deformed, blurry, low quality'
     })
 
@@ -437,20 +445,19 @@ export async function generateComicAvatar(
       throw new Error('Keine Bilder generiert')
     }
 
-    // 3. Erstes Bild als Base64 zurückgeben
+    // 3. Erstes Bild verarbeiten
     const firstImage = images[0]
+    const imageUrl = firstImage.url
 
-    // Wenn schon Base64, direkt zurückgeben
-    if (firstImage.base64) {
-      return firstImage.base64
+    if (!imageUrl) {
+      throw new Error('Keine Bild-URL in der API-Antwort gefunden')
     }
 
-    // Sonst URL zu Base64 konvertieren
-    if (firstImage.url) {
-      return await urlToBase64(firstImage.url)
-    }
+    // URL zu Base64 konvertieren (für lokale Anzeige/Speicherung)
+    const base64 = await urlToBase64(imageUrl)
 
-    throw new Error('Kein Bild-Output gefunden')
+    return { base64, url: imageUrl }
+
   } catch (error) {
     logger.error('Fehler bei Comic-Avatar-Generierung', {
       component: 'KieAiImage',

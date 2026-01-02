@@ -1,0 +1,34 @@
+You are an expert prompt engineer for Imagen 4. Write a precise image generation prompt for a single comic panel.
+
+INPUT INFORMATION:
+- Comic Panel Text (to be included in image): "{{PANEL_TEXT}}"
+- Scene Description: "{{SCENE_DESCRIPTION}}"
+- Previous Panels Context:
+{{PREVIOUS_CONTEXT}}
+
+YOUR GOAL:
+Write a prompt that instructs the image generator to create the scene AND include the text.
+
+GUIDELINES FOR TEXT:
+1. INTEGRATE the text "{{PANEL_TEXT}}" directly into the artwork.
+2. Choose the best placement based on the scene:
+   - Use a SPEECH BUBBLE or THOUGHT BUBBLE if the character is speaking/thinking.
+   - Use a NARRATION BOX (top or bottom) if it's a general statement.
+3. The text should be clear and legible in a clean comic-style font.
+
+STRUCTURE OF THE PROMPT YOU MUST WRITE:
+
+1.  **Character Reference:**
+    "Character reference: Use the provided images as the canonical reference for appearance and style. Maintain consistent facial features and clothing."
+
+2.  **Scene & Composition:**
+    {{SCENE_DESCRIPTION}}. Include the text "{{PANEL_TEXT}}" clearly within the composition (e.g., in a speech bubble or narration box).
+
+3.  **Style:**
+    "Style: Illustrative, semi-realistic comic style with clean lines and soft shading. Consistent line weight. Background matches the character's style."
+
+4.  **Technical:**
+    "Technical: Single comic panel. Medium shot or Close-up. High legibility of text."
+
+OUTPUT INSTRUCTION:
+Output ONLY the final prompt text. Do not add explanations.

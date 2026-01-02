@@ -46,50 +46,6 @@ async function createPanelCanvas(panel: ApprovedPanel): Promise<HTMLCanvasElemen
     })
   }
 
-  // Text-Overlay (unten)
-  const textBoxHeight = 200
-  const gradient = ctx.createLinearGradient(0, CANVAS_SIZE - textBoxHeight, 0, CANVAS_SIZE)
-  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.2)')
-  gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.7)')
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0.8)')
-
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, CANVAS_SIZE - textBoxHeight, CANVAS_SIZE, textBoxHeight)
-
-  // Text zeichnen
-  ctx.fillStyle = '#ffffff'
-  ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-
-  // Text umbrechen
-  const maxWidth = CANVAS_SIZE - 80
-  const lineHeight = 50
-  const words = panel.panelText.split(' ')
-  const lines: string[] = []
-  let currentLine = ''
-
-  for (const word of words) {
-    const testLine = currentLine + (currentLine ? ' ' : '') + word
-    const metrics = ctx.measureText(testLine)
-
-    if (metrics.width > maxWidth && currentLine) {
-      lines.push(currentLine)
-      currentLine = word
-    } else {
-      currentLine = testLine
-    }
-  }
-  if (currentLine) lines.push(currentLine)
-
-  // Zentriere Text vertikal im Text-Bereich
-  const totalTextHeight = lines.length * lineHeight
-  const startY = CANVAS_SIZE - textBoxHeight / 2 - totalTextHeight / 2 + lineHeight / 2
-
-  lines.forEach((line, index) => {
-    ctx.fillText(line, CANVAS_SIZE / 2, startY + index * lineHeight)
-  })
-
   return canvas
 }
 

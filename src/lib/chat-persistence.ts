@@ -45,12 +45,12 @@ export function getAllChatSessions(): ChatSession[] {
     // Dates wiederherstellen (auch in Messages!)
     return sessions.map((s: any) => ({
       ...s,
-      startedAt: new Date(s.startedAt),
-      lastActiveAt: new Date(s.lastActiveAt),
-      messages: s.messages.map((m: any) => ({
+      startedAt: s.startedAt ? new Date(s.startedAt) : new Date(),
+      lastActiveAt: s.lastActiveAt ? new Date(s.lastActiveAt) : new Date(),
+      messages: Array.isArray(s.messages) ? s.messages.map((m: any) => ({
         ...m,
-        timestamp: new Date(m.timestamp)
-      }))
+        timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
+      })) : []
     }))
   } catch (error) {
     logger.error('Fehler beim Laden der Chat-Sessions', {

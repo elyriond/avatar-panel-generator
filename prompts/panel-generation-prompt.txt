@@ -1,0 +1,30 @@
+Basierend auf dieser Konversation über therapeutische Instagram-Inhalte:
+
+{{CONVERSATION_TEXT}}
+
+AUFGABE: Erstelle {{NUM_PANELS}} Panels für einen Instagram-Comic.
+
+Für jedes Panel brauche ich:
+1. `text`: Der Text, der im Bild steht (auf DEUTSCH).
+2. `scene`: Eine detaillierte bildliche Szenenbeschreibung (auf ENGLISCH).
+
+ANFORDERUNGEN:
+- Text-Sprache: Deutsch (Warm, nahbar, professionell)
+- Scene-Sprache: Englisch (Präzise visuelle Beschreibung für einen Image-Generator)
+- Stil: Persönlich, inspirierend
+- Szenen: Passend zum Text, emotional unterstützend
+
+FORMAT:
+Gib mir ein valides JSON-Array zurück.
+Beispiel:
+[
+  {
+    "text": "Manchmal fühlt sich alles zu viel an...",
+    "scene": "Close-up of the face, eyes closed, hand on forehead, expression of exhaustion."
+  },
+  {
+    "text": "Aber das ist okay.",
+    "scene": "Medium shot, she is taking a deep breath, shoulders dropping, relaxed facial expression."
+  }
+]
+Antworte NUR mit dem JSON-Array. Keine Markdown-Formatierung wie ```json.
