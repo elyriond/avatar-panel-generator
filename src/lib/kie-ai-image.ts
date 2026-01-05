@@ -438,7 +438,7 @@ export async function generateComicAvatar(
     const images = await waitForTaskCompletion(
       taskResponse.taskId,
       onProgress,
-      120000 // 2 Minuten Timeout
+      300000 // 5 Minuten Timeout (Bildgenerierung kann 3-5 Min dauern)
     )
 
     if (images.length === 0) {

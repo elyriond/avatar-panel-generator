@@ -5,13 +5,12 @@
 import { logger } from './logger'
 
 const REFERENCE_IMAGE_FILES = [
-  'ref-1.png', // mit schwarzen Sneakern
-  'ref-2.png', // mit den coolen Schuhen aus Erfurt
-  'ref-3.jpg', // entschlossen - grenzsetzend
-  'ref-4.jpg', // Profil rechts (NEU)
-  'ref-5.jpg', // Profil links (NEU)
-  'ref-6.jpg', // selbstmitgefühl
-  'ref-7.jpg', // empathisch - Verständnis zeigend
+  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (1)
+  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (2)
+  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (3)
+  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (4)
+  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (5)
+  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (6)
 ]
 
 /**

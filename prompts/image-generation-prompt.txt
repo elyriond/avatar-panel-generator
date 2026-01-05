@@ -19,7 +19,7 @@ GUIDELINES FOR TEXT:
 STRUCTURE OF THE PROMPT YOU MUST WRITE:
 
 1.  **Character Reference:**
-    "Character reference: Use the provided images as the canonical reference for appearance and style. Maintain consistent facial features and clothing."
+    "Character reference: Use the provided images as the ONLY reference for appearance. Match facial features, hair, and style exactly from the reference images. Do not add or modify features."
 
 2.  **Scene & Composition:**
     {{SCENE_DESCRIPTION}}. Include the text "{{PANEL_TEXT}}" clearly within the composition (e.g., in a speech bubble or narration box).

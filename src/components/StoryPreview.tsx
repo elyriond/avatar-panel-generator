@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, X, ChevronLeft, ChevronRight, Save } from 'lucide-react'
+import { Check, X, ChevronLeft, ChevronRight, Save, Edit } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -13,13 +13,15 @@ interface StoryPreviewProps {
   suggestedTitle: string
   onApprove: (title: string, description?: string) => void
   onReject: () => void
+  onRequestPanelEdit?: (panelIndex: number) => void
 }
 
 export function StoryPreview({
   panels,
   suggestedTitle,
   onApprove,
-  onReject
+  onReject,
+  onRequestPanelEdit
 }: StoryPreviewProps) {
   const [currentPanelIndex, setCurrentPanelIndex] = useState(0)
   const [title, setTitle] = useState(suggestedTitle)
@@ -130,13 +132,6 @@ export function StoryPreview({
               />
             )}
 
-            {/* Text Overlay */}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-8">
-              <p className="text-white text-xl font-medium leading-relaxed text-center">
-                {currentPanel.panelText}
-              </p>
-            </div>
-
             {/* Panel Number Badge */}
             <div className="absolute top-4 right-4 bg-black/70 text-white rounded-full px-3 py-1 text-sm font-bold">
               {currentPanelIndex + 1} / {totalPanels}
@@ -187,33 +182,62 @@ export function StoryPreview({
               </div>
             </div>
           </div>
+
+          {/* Edit Button für aktuelles Panel */}
+          {onRequestPanelEdit && (
+            <div className="p-4 border-t">
+              <Button
+                onClick={() => onRequestPanelEdit(currentPanelIndex)}
+                variant="outline"
+                size="lg"
+                className="w-full"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Dieses Panel überarbeiten
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Thumbnail Strip */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {panels.map((panel, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrentPanelIndex(index)}
-            className={`relative flex-shrink-0 w-20 h-20 rounded border-2 overflow-hidden transition-all ${
-              index === currentPanelIndex
-                ? 'border-primary ring-2 ring-primary ring-offset-2'
-                : 'border-muted hover:border-primary/50'
-            }`}
-            style={{ backgroundColor: panel.backgroundColor }}
-          >
-            {panel.avatarBase64 && (
-              <img
-                src={panel.avatarBase64}
-                alt={`Panel ${index + 1}`}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
+          <div key={index} className="relative flex-shrink-0">
+            <button
+              onClick={() => setCurrentPanelIndex(index)}
+              className={`relative w-20 h-20 rounded border-2 overflow-hidden transition-all ${
+                index === currentPanelIndex
+                  ? 'border-primary ring-2 ring-primary ring-offset-2'
+                  : 'border-muted hover:border-primary/50'
+              }`}
+              style={{ backgroundColor: panel.backgroundColor }}
+            >
+              {panel.avatarBase64 && (
+                <img
+                  src={panel.avatarBase64}
+                  alt={`Panel ${index + 1}`}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              )}
+              <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-xs text-center py-0.5">
+                {index + 1}
+              </div>
+            </button>
+            {/* Edit-Button für Thumbnail */}
+            {onRequestPanelEdit && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRequestPanelEdit(index)
+                }}
+                className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full p-1 shadow-lg hover:bg-primary/90 transition-all"
+                title={`Panel ${index + 1} überarbeiten`}
+              >
+                <Edit className="w-3 h-3" />
+              </button>
             )}
-            <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-xs text-center py-0.5">
-              {index + 1}
-            </div>
-          </button>
+          </div>
         ))}
       </div>
 

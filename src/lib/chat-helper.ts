@@ -18,6 +18,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  image?: string  // Optional: Base64-Bild für Panel-Editing
 }
 
 export interface PanelData {

@@ -46,6 +46,10 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
   const [generatedStory, setGeneratedStory] = useState<Omit<import('@/lib/story-persistence').StoryPanel, 'id' | 'generatedAt'>[] | null>(null)
   const [showStoryPreview, setShowStoryPreview] = useState(false)
 
+  // Panel-Edit States
+  const [editingPanelIndex, setEditingPanelIndex] = useState<number | null>(null)
+  const [isRegeneratingPanel, setIsRegeneratingPanel] = useState(false)
+
   // Prüfen ob die letzte Nachricht ein Storyboard ist
   const lastMessage = messages[messages.length - 1]
   const isStoryboardReady = lastMessage && lastMessage.role === 'assistant' && isStoryboardMessage(lastMessage.content)
@@ -272,6 +276,29 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
     setGeneratedStory(null)
   }
 
+  // Panel-Edit-Handler
+  const handlePanelEditRequest = (panelIndex: number) => {
+    logger.userAction('ChatInterface', 'request_panel_edit', {
+      panelIndex
+    })
+
+    // Zurück zum Chat, Edit-Modus aktivieren
+    setEditingPanelIndex(panelIndex)
+    setShowStoryPreview(false)
+
+    // Panel-Bild für Referenz holen
+    const panelImage = generatedStory?.[panelIndex]?.avatarBase64
+
+    // Hinweis-Nachricht im Chat MIT Panel-Bild
+    const hintMessage: ChatMessage = {
+      role: 'assistant',
+      content: `Du möchtest Panel ${panelIndex + 1} überarbeiten. Schau dir das Panel oben an und beschreibe mir, was anders sein soll (z.B. "bitte fröhlicher aussehen" oder "hellerer Hintergrund").`,
+      timestamp: new Date(),
+      image: panelImage  // Zeige das Panel zur Referenz
+    }
+    setMessages(prev => [...prev, hintMessage])
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -288,6 +315,7 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
         suggestedTitle={suggestedTitle}
         onApprove={handleStoryApprove}
         onReject={handleStoryReject}
+        onRequestPanelEdit={handlePanelEditRequest}
       />
     )
   }
@@ -313,6 +341,17 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
                 }`}
               >
                 <CardContent className="p-3">
+                  {/* Panel-Bild für Edit-Modus */}
+                  {message.image && (
+                    <div className="mb-3">
+                      <img
+                        src={message.image}
+                        alt="Panel zur Überarbeitung"
+                        className="w-full max-w-sm rounded border-2 border-primary/30"
+                      />
+                    </div>
+                  )}
+
                   {isJson ? (
                     <div className="font-mono text-xs whitespace-pre-wrap overflow-x-auto">
                       {message.content}
