@@ -1,34 +1,89 @@
-You are an expert prompt engineer for Imagen 4. Write a precise image generation prompt for a single comic panel.
+You are an expert prompt engineer for Imagen 4. Write a precise image generation prompt for a single comic panel in JSON format.
 
 INPUT INFORMATION:
-- Comic Panel Text (to be included in image): "{{PANEL_TEXT}}"
+- Comic Panel Text: "{{PANEL_TEXT}}"
 - Scene Description: "{{SCENE_DESCRIPTION}}"
-- Previous Panels Context:
-{{PREVIOUS_CONTEXT}}
+- Previous Panels Context: {{PREVIOUS_CONTEXT}}
 
 YOUR GOAL:
-Write a prompt that instructs the image generator to create the scene AND include the text.
+Output a single JSON object that describes the scene, character, and style in high detail. The image generator will use the attached reference images as the primary source of truth for the character's face.
 
-GUIDELINES FOR TEXT:
-1. INTEGRATE the text "{{PANEL_TEXT}}" directly into the artwork.
-2. Choose the best placement based on the scene:
-   - Use a SPEECH BUBBLE or THOUGHT BUBBLE if the character is speaking/thinking.
-   - Use a NARRATION BOX (top or bottom) if it's a general statement.
-3. The text should be clear and legible in a clean comic-style font.
+MANDATORY CHARACTER ANCHOR:
+- Name: Theresa
+- Age: Early 40s (Mature facial features)
+- Hair: Light blonde, tied back in a low bun/ponytail, side-swept wispy bangs.
+- Eyes: Blue.
+- Glasses: Round, VERY THIN silver metal frames.
+- Outfit: Default is plain black long-sleeve crew-neck shirt (unless scene requires pajamas, coat, etc.).
 
-STRUCTURE OF THE PROMPT YOU MUST WRITE:
-
-1.  **Character Reference:**
-    "Character reference: Use the provided images as the ONLY reference for appearance. Match facial features, hair, and style exactly from the reference images. Do not add or modify features."
-
-2.  **Scene & Composition:**
-    {{SCENE_DESCRIPTION}}. Include the text "{{PANEL_TEXT}}" clearly within the composition (e.g., in a speech bubble or narration box).
-
-3.  **Style:**
-    "Style: Illustrative, semi-realistic comic style with clean lines and soft shading. Consistent line weight. Background matches the character's style."
-
-4.  **Technical:**
-    "Technical: Single comic panel. Medium shot or Close-up. High legibility of text."
+OUTPUT STRUCTURE (Return ONLY this JSON):
+{
+  "subject": {
+    "name": "Theresa",
+    "reference_usage": "Strictly match facial features from attached images",
+    "character_details": {
+      "age_range": "early 40s",
+      "skin_tone": "fair",
+      "facial_features": {
+        "expression": "friendly, empathetic",
+        "eyes": "blue, soft gaze",
+        "glasses": "large round, ultra-thin silver metal frames"
+      },
+      "hair": {
+        "color": "light blonde",
+        "style": "tied back in a low bun",
+        "bangs": "side-swept wispy bangs"
+      },
+      "clothing": {
+        "top": "plain black long-sleeve crew-neck sweater (OR appropriate outfit for the scene context)",
+        "style": "casual, minimal"
+      }
+    }
+  },
+  "art_style": {
+    "medium": "clean digital illustration",
+    "genre": "modern editorial comic",
+    "line_art": {
+      "weight": "thin",
+      "quality": "clean and uniform",
+      "color": "dark charcoal (#333333)",
+      "outline_intensity": "soft"
+    },
+    "shading": {
+      "method": "soft airbrush gradients",
+      "contrast": "low",
+      "style": "smooth painterly shading (NO cel-shading)"
+    },
+    "color_palette": {
+      "saturation": "muted",
+      "temperature": "warm and natural",
+      "tones": ["beige", "sage", "muted coral", "soft blue"]
+    }
+  },
+  "composition": {
+    "description": "{{SCENE_DESCRIPTION}}",
+    "shot_type": "medium shot or close-up",
+    "background": {
+      "type": "simple solid cream or abstract color wash",
+      "detail_level": "minimal"
+    }
+  },
+  "rendering_constraints": {
+    "avoid": [
+      "photorealism",
+      "sketchy lines",
+      "paper texture",
+      "watercolor bleeding",
+      "heavy black shadows",
+      "anime style"
+    ]
+  },
+  "text_integration": {
+    "content": "{{PANEL_TEXT}}",
+    "placement": "integrated speech bubble or narration box",
+    "typography": "hand-lettered comic font"
+  }
+}
 
 OUTPUT INSTRUCTION:
-Output ONLY the final prompt text. Do not add explanations.
+Output ONLY the JSON object. Do not add markdown code blocks.

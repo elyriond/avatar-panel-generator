@@ -5,12 +5,9 @@
 import { logger } from './logger'
 
 const REFERENCE_IMAGE_FILES = [
-  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (1)
-  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (2)
-  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (3)
-  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (4)
-  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (5)
-  'ref-1.jpg', // Kopfaufnahme - BESTES Bild (6)
+  'ref-1.jpg', // Frontal Face (High Detail)
+  'ref-2.jpg', // 3/4 View
+  'ref-5.jpg'  // Full Body Profile
 ]
 
 /**

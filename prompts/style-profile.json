@@ -1,0 +1,32 @@
+{
+  "style_profile": {
+    "medium": "clean modern digital illustration",
+    "art_style": "polished webtoon/editorial comic",
+    "line_work": {
+      "quality": "fine, uniform, consistent line weight",
+      "color": "dark grey or soft black (#2a2a2a)",
+      "description": "very smooth and clean lines. NO sketchiness, NO rough textures, NO broken lines."
+    },
+    "coloring": {
+      "technique": "smooth digital coloring with soft airbrush gradients",
+      "shading": "clean soft shading to show volume. Minimal texture.",
+      "palette": "Praxis Feinblick palette: warm beige, soft sage, muted coral, calming blues"
+    }
+  },
+  "character_anchor": {
+    "name": "Theresa",
+    "age": "early 40s",
+    "hair": {
+      "color": "light blonde",
+      "style": "neat low ponytail, wispy side-swept bangs",
+      "texture": "smooth digital rendering"
+    },
+    "eyes": {
+      "color": "blue",
+      "eyewear": "large round thin silver metal frames"
+    },
+    "clothing": {
+      "default": "black crew-neck sweater"
+    }
+  }
+}

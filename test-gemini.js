@@ -4,8 +4,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import * as dotenv from 'dotenv';
 
-// Lade .env Datei
-dotenv.config();
+// Lade .env Datei mit Override
+dotenv.config({ override: true });
 
 async function testGeminiAPI() {
   console.log('🔍 Teste Gemini API Key...\n');
@@ -27,7 +27,7 @@ async function testGeminiAPI() {
     console.log('📡 Sende Test-Anfrage an Gemini API...');
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-09-2025' });
 
     const prompt = 'Antworte nur mit dem Wort "funktioniert"';
     const result = await model.generateContent(prompt);

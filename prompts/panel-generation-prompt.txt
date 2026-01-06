@@ -2,7 +2,8 @@ Basierend auf dieser Konversation über therapeutische Instagram-Inhalte:
 
 {{CONVERSATION_TEXT}}
 
-AUFGABE: Erstelle {{NUM_PANELS}} Panels für einen Instagram-Comic.
+AUFGABE: Erstelle einen Instagram-Comic basierend auf dem Gesprächsverlauf. 
+WICHTIG: Falls die Nutzerin im Gespräch eine bestimmte Anzahl an Panels gewünscht hat, halte dich strikt daran. Ansonsten wähle eine passende Anzahl zwischen 1 und 10 Panels.
 
 Für jedes Panel brauche ich:
 1. `text`: Der Text, der im Bild steht (auf DEUTSCH).

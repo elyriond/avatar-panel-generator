@@ -443,7 +443,7 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
               ) : (
                 <Sparkles className="w-4 h-4 mr-2" />
               )}
-              Storyboard vorschlagen ({numPanels} Panels)
+              Storyboard vorschlagen
             </Button>
           )
         )}
