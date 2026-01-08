@@ -83,9 +83,9 @@ export async function generateCompleteStory(
         }
       )
 
-      // WICHTIG: Die URL des neuen Bildes für das NÄCHSTE Panel hinzufügen
-      // Wir fügen sie ganz vorne ein
-      currentReferenceUrls = [result.url, ...currentReferenceUrls]
+      // WICHTIG: Wir deaktivieren das recursive Referencing, um den "Drift" zu verhindern.
+      // Wir nutzen für JEDES Panel nur die originalen Referenzbilder.
+      // currentReferenceUrls = [result.url, ...currentReferenceUrls]
 
       panels.push({
         panelNumber,

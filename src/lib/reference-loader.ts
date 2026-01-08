@@ -5,9 +5,10 @@
 import { logger } from './logger'
 
 const REFERENCE_IMAGE_FILES = [
-  'ref-1.jpg', // Frontal Face (High Detail)
-  'ref-2.jpg', // 3/4 View
-  'ref-5.jpg'  // Full Body Profile
+  'ref-1.jpg', // THE source of truth
+  'ref-1.jpg', 
+  'ref-1.jpg',
+  'ref-1.jpg'
 ]
 
 /**

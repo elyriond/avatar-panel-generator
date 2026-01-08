@@ -23,16 +23,13 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
     "reference_usage": "Strictly match facial features from attached images",
     "character_details": {
       "age_range": "early 40s",
-      "skin_tone": "fair",
       "facial_features": {
-        "expression": "friendly, empathetic",
-        "eyes": "blue, soft gaze",
+        "reference_usage": "CRITICAL: Ignore generic text descriptions. COPY the face from the reference image.",
         "glasses": "large round, ultra-thin silver metal frames"
       },
       "hair": {
         "color": "light blonde",
-        "style": "tied back in a low bun",
-        "bangs": "side-swept wispy bangs"
+        "style": "tied back in a low bun, side-swept wispy bangs"
       },
       "clothing": {
         "top": "plain black long-sleeve crew-neck sweater (OR appropriate outfit for the scene context)",
@@ -41,18 +38,18 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
     }
   },
   "art_style": {
-    "medium": "clean digital illustration",
-    "genre": "modern editorial comic",
+    "medium": "high-definition digital illustration",
+    "genre": "modern professional editorial comic",
     "line_art": {
       "weight": "thin",
-      "quality": "clean and uniform",
+      "quality": "clean, precise, uniform",
       "color": "dark charcoal (#333333)",
       "outline_intensity": "soft"
     },
     "shading": {
-      "method": "soft airbrush gradients",
+      "method": "ultra-smooth airbrush gradients",
       "contrast": "low",
-      "style": "smooth painterly shading (NO cel-shading)"
+      "style": "polished digital rendering (NO sketchiness, NO textures, NO visible brush strokes)"
     },
     "color_palette": {
       "saturation": "muted",

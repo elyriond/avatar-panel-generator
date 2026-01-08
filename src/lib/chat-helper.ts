@@ -133,7 +133,10 @@ export async function generatePanelsFromChat(
   try {
     const model = genAI.getGenerativeModel({
        model: 'gemini-2.5-flash-preview-09-2025',
-       generationConfig: { responseMimeType: "application/json" }
+       generationConfig: { 
+         responseMimeType: "application/json",
+         temperature: 0.7 
+       }
     })
 
     const conversationText = history
@@ -178,71 +181,40 @@ export async function generatePanelsFromChat(
  */
 
 export async function generateImagePrompt(
-
   panelData: PanelData,
-
   previousContext: string = ''
-
 ): Promise<string> {
-
   logger.apiCall('gemini-2.5-flash-preview-09-2025', 'generateImagePrompt', {
-
     panelTextLength: panelData.text.length,
-
     sceneDescriptionLength: panelData.scene.length,
-
     contextLength: previousContext.length
-
   })
 
-
-
   try {
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-09-2025' })
-
-
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash-preview-09-2025',
+      generationConfig: { temperature: 0.7 }
+    })
 
     // Template-Variablen ersetzen
-
     const prompt = imageGenerationPromptTemplate
-
       .replace('{{PANEL_TEXT}}', panelData.text)
-
       .replace('{{SCENE_DESCRIPTION}}', panelData.scene)
-
       .replace('{{PREVIOUS_CONTEXT}}', previousContext || 'None (First Panel)')
 
-
-
     const result = await model.generateContent(prompt)
-
     const imagePromptText = result.response.text().trim()
 
-
-
     logger.apiResponse('gemini-2.0-flash-exp', 200, {
-
       imagePromptLength: imagePromptText.length
-
     })
-
-
 
     return imagePromptText
-
   } catch (error) {
-
     logger.error('Fehler beim Generieren des Image-Prompts', {
-
       component: 'ChatHelper',
-
       data: error
-
     })
-
     throw error
-
   }
-
 }
