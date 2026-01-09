@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { startChatSession, sendChatMessage, generatePanelsFromChat, type ChatMessage, type PanelData } from '@/lib/chat-helper'
 import { type ChatSession, addMessageToSession, updateChatSession } from '@/lib/chat-persistence'
 import { type CharacterProfile, generateSystemPromptWithProfile } from '@/lib/character-profile'
-import { generateCompleteStory, estimateGenerationTime, type PanelGenerationProgress } from '@/lib/story-generator'
+import { generateCompleteStory, regenerateSinglePanel, estimateGenerationTime, type PanelGenerationProgress } from '@/lib/story-generator'
 import { createStory, type ComicStory } from '@/lib/story-persistence'
 import { StoryPreview } from '@/components/StoryPreview'
 import { logger } from '@/lib/logger'
@@ -134,6 +134,12 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
       onSessionUpdated(updatedSession)
     }
 
+    // CHECK: Sind wir im Panel-Edit-Modus?
+    if (editingPanelIndex !== null && generatedStory) {
+      await handlePanelRegeneration(editingPanelIndex, userMessage)
+      return
+    }
+
     setIsLoading(true)
 
     try {
@@ -161,6 +167,66 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
       setError('Fehler beim Senden der Nachricht. Bitte versuche es erneut.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Panel-Regenerierung mit User-Feedback
+  const handlePanelRegeneration = async (panelIndex: number, userFeedback: string) => {
+    if (!characterProfile || !generatedStory) return
+
+    logger.userAction('ChatInterface', 'regenerate_single_panel', {
+      panelIndex,
+      feedback: userFeedback
+    })
+
+    setIsRegeneratingPanel(true)
+    setError(null)
+
+    try {
+      // Hole das Storyboard aus dem Chat
+      const storyboardMsg = messages.find(m => isStoryboardMessage(m.content))
+      if (!storyboardMsg) {
+        setError('Storyboard nicht gefunden. Bitte generiere die Story neu.')
+        return
+      }
+
+      const panelDataList: PanelData[] = JSON.parse(
+        storyboardMsg.content.replace(/```json\n?|\n?```/g, '').trim()
+      )
+
+      // Regeneriere NUR dieses eine Panel
+      const updatedPanel = await regenerateSinglePanel(
+        panelIndex,
+        panelDataList[panelIndex],
+        panelDataList,
+        characterProfile,
+        '#e8dfd0',
+        userFeedback
+      )
+
+      // Ersetze das Panel in der Story
+      const updatedStory = [...generatedStory]
+      updatedStory[panelIndex] = updatedPanel
+
+      setGeneratedStory(updatedStory)
+
+      // Erfolgsnachricht
+      const successMessage: ChatMessage = {
+        role: 'assistant',
+        content: `✅ Panel ${panelIndex + 1} wurde neu generiert mit deinem Feedback!`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+      // Zurück zur Preview & Edit-Modus deaktivieren
+      setEditingPanelIndex(null)
+      setShowStoryPreview(true)
+
+    } catch (err) {
+      console.error('Fehler bei Panel-Regenerierung:', err)
+      setError(`Fehler bei Panel-Regenerierung: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`)
+    } finally {
+      setIsRegeneratingPanel(false)
     }
   }
 
@@ -379,6 +445,17 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
           </div>
         )}
 
+        {isRegeneratingPanel && (
+          <div className="flex justify-start">
+            <Card className="bg-primary/10">
+              <CardContent className="p-3 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <p className="text-sm font-medium">Regeneriere Panel mit deinem Feedback...</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -396,14 +473,18 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Schreibe deine Nachricht... (Enter zum Senden, Shift+Enter für neue Zeile)"
+            placeholder={
+              editingPanelIndex !== null
+                ? `Beschreibe deine Änderungswünsche für Panel ${editingPanelIndex + 1}...`
+                : "Schreibe deine Nachricht... (Enter zum Senden, Shift+Enter für neue Zeile)"
+            }
             rows={2}
-            disabled={isLoading || isGeneratingStory || isGeneratingPanels}
+            disabled={isLoading || isGeneratingStory || isGeneratingPanels || isRegeneratingPanel}
             className="flex-1 resize-none"
           />
           <Button
             onClick={handleSendMessage}
-            disabled={isLoading || !inputValue.trim() || isGeneratingStory}
+            disabled={isLoading || !inputValue.trim() || isGeneratingStory || isRegeneratingPanel}
             size="icon"
             className="h-full aspect-square"
           >
