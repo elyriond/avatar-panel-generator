@@ -137,9 +137,12 @@ export function MainApp() {
   if (currentView === 'loading') {
     return (
       <div className="min-h-screen bg-background p-6 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-muted-foreground">Lade Referenzbilder...</p>
+        <div className="text-center space-y-6">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary border-t-transparent mx-auto"></div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold text-foreground">Comic Panel Generator</h2>
+            <p className="text-muted-foreground">Lade Referenzbilder...</p>
+          </div>
         </div>
       </div>
     )
@@ -166,11 +169,16 @@ export function MainApp() {
   if (currentView === 'session-select') {
     return (
       <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold">Willkommen zurück! 💚</h1>
-            <p className="text-muted-foreground">
-              Wähle einen Chat aus oder starte einen neuen.
+        <div className="max-w-6xl mx-auto space-y-8">
+          {/* Header mit Gradient */}
+          <div className="text-center space-y-4 py-12">
+            <div className="inline-block px-6 py-3 bg-gradient-warm rounded-2xl shadow-soft mb-4">
+              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-strong">
+                Comic Panel Generator
+              </h1>
+            </div>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              Erstelle AI-generierte Comic-Stories mit deinem Character ✨
             </p>
           </div>
 
@@ -180,7 +188,7 @@ export function MainApp() {
             <div className="text-center">
               <button
                 onClick={() => setCurrentView('profile-setup')}
-                className="text-sm text-muted-foreground hover:text-foreground underline"
+                className="text-sm text-primary hover:text-primary-strong underline transition-smooth"
               >
                 Character Profile bearbeiten
               </button>
@@ -196,41 +204,49 @@ export function MainApp() {
     return (
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">{currentSession.title}</h1>
-              <p className="text-sm text-muted-foreground">
+          {/* Modern Header with Card */}
+          <div className="bg-card rounded-2xl shadow-elegant p-6 border border-border">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h1 className="text-3xl font-bold text-foreground">{currentSession.title}</h1>
                 {currentSession.tags.length > 0 && (
-                  <>#{currentSession.tags.join(' #')}</>
+                  <div className="flex gap-2">
+                    {currentSession.tags.map((tag, i) => (
+                      <span
+                        key={i}
+                        className="inline-block px-3 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* AI-Modell Auswahl (TEST) */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground">
-                  🧪 Test-Modell:
-                </label>
-                <select
-                  value={characterProfile?.aiModel || 'nano-banana-pro'}
-                  onChange={(e) => handleAiModelChange(e.target.value as KieAiModel)}
-                  className="px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="nano-banana-pro">Imagen 4 (Stabil) ✅</option>
-                  <option value="flux-2">Flux.2 (Test)</option>
-                  <option value="ideogram-v3">Ideogram V3 (Test)</option>
-                  <option value="flux-kontxt">Flux Kontxt (Test)</option>
-                  <option value="gpt-image-1.5">GPT Image 1.5 (Test)</option>
-                </select>
               </div>
 
-              <button
-                onClick={handleBackToSessionSelect}
-                className="text-sm text-muted-foreground hover:text-foreground underline"
-              >
-                Zurück zur Übersicht
-              </button>
+              <div className="flex items-center gap-4">
+                {/* AI-Modell Auswahl (TEST) */}
+                <div className="flex items-center gap-3 bg-accent/30 px-4 py-2 rounded-xl border border-border">
+                  <span className="text-sm font-medium text-foreground">🧪 Modell:</span>
+                  <select
+                    value={characterProfile?.aiModel || 'nano-banana-pro'}
+                    onChange={(e) => handleAiModelChange(e.target.value as KieAiModel)}
+                    className="px-3 py-2 rounded-lg border border-input bg-card text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
+                  >
+                    <option value="nano-banana-pro">Imagen 4 ✅</option>
+                    <option value="flux-2">Flux.2</option>
+                    <option value="ideogram-v3">Ideogram V3</option>
+                    <option value="flux-kontxt">Flux Kontxt</option>
+                    <option value="gpt-image-1.5">GPT Image 1.5</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={handleBackToSessionSelect}
+                  className="px-4 py-2 text-sm font-medium text-primary hover:text-primary-strong hover:bg-primary/5 rounded-lg transition-smooth"
+                >
+                  ← Zurück
+                </button>
+              </div>
             </div>
           </div>
 
