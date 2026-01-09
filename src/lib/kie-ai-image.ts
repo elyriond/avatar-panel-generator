@@ -17,6 +17,13 @@ if (!API_KEY) {
 // Types & Interfaces
 // ============================================================================
 
+export type KieAiModel =
+  | 'nano-banana-pro'      // Imagen 4 (default, current stable)
+  | 'flux-2'               // Flux.2
+  | 'ideogram-v3'          // Ideogram V3
+  | 'flux-kontxt'          // Flux Kontxt
+  | 'gpt-image-1.5'        // GPT Image 1.5
+
 export interface ImageGenerationOptions {
   prompt: string
   referenceImages: string[]        // Base64 encoded images (max 8)
@@ -24,6 +31,7 @@ export interface ImageGenerationOptions {
   resolution?: '1K' | '2K' | '4K'
   outputFormat?: 'png' | 'jpg'
   negativePrompt?: string
+  model?: KieAiModel              // Optional: Welches Modell verwenden (default: nano-banana-pro)
 }
 
 export interface TaskResponse {
@@ -77,7 +85,7 @@ export async function createImageTask(
     })
 
     const requestBody = {
-      model: 'nano-banana-pro',
+      model: options.model || 'nano-banana-pro',  // Default: Imagen 4 (bewährtes System)
       task_type: 'image_generation',
       input: {
         prompt: options.prompt,
@@ -383,16 +391,21 @@ async function urlToBase64(url: string): Promise<string> {
  * @param prompt - Detaillierte Szenen-Beschreibung
  * @param referenceImages - Base64-kodierte Referenzbilder ODER URLs (max 8)
  * @param onProgress - Optional: Progress-Callback
+ * @param model - Optional: Welches KIE.AI Modell verwenden (default: nano-banana-pro/Imagen 4)
  * @returns Objekt mit Base64-kodiertem Bild und der Original-URL
  */
 export async function generateComicAvatar(
   prompt: string,
   referenceImages: string[],
-  onProgress?: (progress: number, status: string) => void
+  onProgress?: (progress: number, status: string) => void,
+  model?: KieAiModel
 ): Promise<{ base64: string, url: string }> {
+  const selectedModel = model || 'nano-banana-pro'
+
   logger.info('Starte Comic-Avatar-Generierung', {
     component: 'KieAiImage',
     data: {
+      model: selectedModel,
       promptLength: prompt.length,
       referenceImageCount: referenceImages.length
     }
@@ -427,7 +440,8 @@ export async function generateComicAvatar(
       aspectRatio: '1:1',
       resolution: '1K',
       outputFormat: 'jpg',
-      negativePrompt: 'realistic photo, photograph, 3d render, ugly, deformed, blurry, low quality'
+      negativePrompt: 'realistic photo, photograph, 3d render, ugly, deformed, blurry, low quality',
+      model: selectedModel  // Verwende das ausgewählte Modell (default: nano-banana-pro)
     })
 
     if (!taskResponse.success) {

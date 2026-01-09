@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logger'
+import type { KieAiModel } from './kie-ai-image'
 
 export interface ReferenceImages {
   frontal?: string          // Base64 oder URL
@@ -41,6 +42,9 @@ export interface CharacterProfile {
 
   // Optional: Pfade zu Referenzbildern (werden bei Bedarf geladen, um LocalStorage zu schonen)
   referenceImagePaths?: string[]
+
+  // AI-Modell für Bildgenerierung (TEST-Feature)
+  aiModel?: KieAiModel  // Default: 'nano-banana-pro' (Imagen 4)
 
   // Stil & Brand
   stylePreferences: StylePreferences

@@ -143,7 +143,8 @@ export async function generateCompleteStory(
         activeRefs,
         (progress, status) => {
           logger.debug(`Panel ${panelNumber}: ${status} (${progress}%)`)
-        }
+        },
+        characterProfile.aiModel  // Verwende ausgewähltes Modell aus Profil (default: nano-banana-pro)
       )
 
       // WICHTIG: Wir deaktivieren das recursive Referencing, um den "Drift" zu verhindern.
@@ -249,7 +250,12 @@ export async function regenerateSinglePanel(
   }
 
   // Avatar generieren
-  const result = await generateComicAvatar(imagePrompt, referenceUrls)
+  const result = await generateComicAvatar(
+    imagePrompt,
+    referenceUrls,
+    undefined,  // kein progress callback
+    characterProfile.aiModel  // Verwende ausgewähltes Modell aus Profil
+  )
 
   return {
     panelNumber,

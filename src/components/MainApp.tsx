@@ -22,6 +22,7 @@ import {
 import { type ComicStory } from '@/lib/story-persistence'
 import { createAutoCharacterProfile } from '@/lib/reference-loader'
 import { logger } from '@/lib/logger'
+import { type KieAiModel } from '@/lib/kie-ai-image'
 
 type AppView = 'profile-setup' | 'session-select' | 'chat' | 'story-creator' | 'loading'
 
@@ -114,6 +115,24 @@ export function MainApp() {
     setViewedStory(null)
   }
 
+  const handleAiModelChange = (model: KieAiModel) => {
+    if (!characterProfile) return
+
+    logger.userAction('MainApp', 'ai_model_changed', {
+      previousModel: characterProfile.aiModel || 'nano-banana-pro',
+      newModel: model
+    })
+
+    const updatedProfile = {
+      ...characterProfile,
+      aiModel: model,
+      lastUpdatedAt: new Date()
+    }
+
+    setCharacterProfile(updatedProfile)
+    saveCharacterProfile(updatedProfile)
+  }
+
   // View: Loading
   if (currentView === 'loading') {
     return (
@@ -187,12 +206,32 @@ export function MainApp() {
               </p>
             </div>
 
-            <button
-              onClick={handleBackToSessionSelect}
-              className="text-sm text-muted-foreground hover:text-foreground underline"
-            >
-              Zurück zur Übersicht
-            </button>
+            <div className="flex items-center gap-4">
+              {/* AI-Modell Auswahl (TEST) */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground">
+                  🧪 Test-Modell:
+                </label>
+                <select
+                  value={characterProfile?.aiModel || 'nano-banana-pro'}
+                  onChange={(e) => handleAiModelChange(e.target.value as KieAiModel)}
+                  className="px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="nano-banana-pro">Imagen 4 (Stabil) ✅</option>
+                  <option value="flux-2">Flux.2 (Test)</option>
+                  <option value="ideogram-v3">Ideogram V3 (Test)</option>
+                  <option value="flux-kontxt">Flux Kontxt (Test)</option>
+                  <option value="gpt-image-1.5">GPT Image 1.5 (Test)</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleBackToSessionSelect}
+                className="text-sm text-muted-foreground hover:text-foreground underline"
+              >
+                Zurück zur Übersicht
+              </button>
+            </div>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
