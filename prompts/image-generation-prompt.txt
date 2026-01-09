@@ -13,7 +13,7 @@ MANDATORY CHARACTER ANCHOR:
 - Age: Early 40s (Mature facial features)
 - Hair: Light blonde, tied back in a low bun/ponytail, side-swept wispy bangs.
 - Eyes: Blue.
-- Glasses: Round, VERY THIN silver metal frames.
+- Glasses: Large round to slightly panto-shaped full-rim glasses, MATTE BLACK acetate (never silver, always black).
 - Outfit: Default is plain black long-sleeve crew-neck shirt (unless scene requires pajamas, coat, etc.).
 
 OUTPUT STRUCTURE (Return ONLY this JSON):
@@ -25,7 +25,7 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
       "age_range": "early 40s",
       "facial_features": {
         "reference_usage": "CRITICAL: Ignore generic text descriptions. COPY the face from the reference image.",
-        "glasses": "large round, ultra-thin silver metal frames"
+        "glasses": "Large round to slightly panto-shaped full-rim glasses in matte black acetate, modern retro style, MUST be consistently matte black"
       },
       "hair": {
         "color": "light blonde",
@@ -34,6 +34,26 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
       "clothing": {
         "top": "plain black long-sleeve crew-neck sweater (OR appropriate outfit for the scene context)",
         "style": "casual, minimal"
+      }
+    }
+  },
+  "secondary_character": {
+    "condition": "ONLY include this character if the word 'Freund' appears in the scene description {{SCENE_DESCRIPTION}}. If 'Freund' is NOT present, omit this entire section from the output.",
+    "name": "Ben",
+    "reference_usage": "If included: Strictly match facial features from the male reference image provided",
+    "character_details": {
+      "gender": "male",
+      "age_range": "early 40s",
+      "facial_features": {
+        "reference_usage": "CRITICAL: Use the male reference image. COPY the face from this reference image.",
+        "facial_hair": "as shown in reference image",
+        "distinctive_features": "match reference image exactly"
+      },
+      "hair": {
+        "style": "as shown in reference image"
+      },
+      "clothing": {
+        "style": "casual, minimal (appropriate for scene context)"
       }
     }
   },
@@ -66,13 +86,16 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
     }
   },
   "rendering_constraints": {
+    "hands": "ONLY if hands are visible in the scene: stylized slender hands with long fingers, simplified anatomy, smooth contours, minimal detail, clean lineart, correct comic illustration style (5 fingers each). Do not force hands into the composition if not needed.",
+    "neck_shoulders": "If neck and shoulders are visible: simplified neck and shoulders, clean silhouette, smooth contours, minimal detail, stylized comic illustration - avoid overly realistic anatomy or excessive shading.",
     "avoid": [
       "photorealism",
       "sketchy lines",
       "paper texture",
       "watercolor bleeding",
       "heavy black shadows",
-      "anime style"
+      "anime style",
+      "incorrect hand anatomy (wrong number of fingers)"
     ]
   },
   "text_integration": {
