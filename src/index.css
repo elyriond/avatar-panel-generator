@@ -85,6 +85,9 @@
     --border: 25 15% 25%;
     --input: 25 15% 25%;
     --ring: 12 45% 60%;
+
+    /* Dark gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(25 20% 18% / 0.85), hsl(12 20% 22% / 0.85));
   }
 }
 
@@ -95,10 +98,11 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', 'Roboto', sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
   }
 
   /* Sanfte Animationen */
@@ -108,6 +112,9 @@
 
   /* Hero-Hintergrund */
   .hero-gradient {
+    background: var(--gradient-hero);
+  }
+  .dark .hero-gradient {
     background: var(--gradient-hero);
   }
 
@@ -168,5 +175,104 @@
   a:focus-visible,
   [role="button"]:focus-visible {
     @apply ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Apple-Style Glassmorphism Effects */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.70);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .glass-subtle {
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Apple-Style Shadows */
+  .shadow-apple {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04),
+                0 10px 20px rgba(0, 0, 0, 0.06),
+                0 20px 40px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-apple-lg {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06),
+                0 20px 40px rgba(0, 0, 0, 0.08),
+                0 40px 80px rgba(0, 0, 0, 0.06);
+  }
+
+  /* Apple-Style Hover Effects */
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
+                0 20px 40px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Clean Apple Typography */
+  .text-apple-title {
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    line-height: 1.1;
+  }
+
+  .text-apple-body {
+    font-weight: 400;
+    letter-spacing: -0.011em;
+    line-height: 1.47059;
+  }
+
+  /* Readability boosters for titles over gradients/glass */
+  .title-readable {
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.10),
+                 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  .subtitle-readable {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Dark mode fine-tuning */
+  .dark .title-readable {
+    text-shadow: 0 2px 8px rgba(255, 255, 255, 0.10),
+                 0 6px 20px rgba(255, 255, 255, 0.06);
+  }
+  .dark .subtitle-readable {
+    text-shadow: 0 1px 4px rgba(255, 255, 255, 0.08);
+  }
+
+  /* Gradient text for hero title */
+  .text-gradient-warm {
+    background: var(--gradient-warm);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Glassmorphism dark variants */
+  .dark .glass-card {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .dark .glass-panel {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .dark .glass-subtle {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
   }
 }

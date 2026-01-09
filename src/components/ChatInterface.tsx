@@ -389,7 +389,7 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
   return (
     <div className="flex flex-col h-[600px] border rounded-lg">
       {/* Chat-Nachrichten */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-4">
         {messages.map((message, index) => {
           const isJson = isStoryboardMessage(message.content)
           return (
@@ -461,13 +461,61 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
 
       {/* Fehler-Anzeige */}
       {error && (
-        <div className="px-4 py-2 bg-destructive/10 text-destructive text-sm">
+        <div className="px-3 md:px-4 py-2 bg-destructive/10 text-destructive text-sm">
           {error}
         </div>
       )}
 
       {/* Input-Bereich */}
-      <div className="border-t p-4 space-y-3">
+      <div className="border-t p-3 md:p-4 space-y-3">
+        {/* Konversations-Optionen (A/B/C/D) */}
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="glass-subtle border border-white/40"
+            disabled={isLoading || isGeneratingStory || isGeneratingPanels || isRegeneratingPanel}
+            onClick={() => setInputValue(prev => prev ? `${prev} Ich möchte das Thema noch schärfen.` : 'Ich möchte das Thema noch schärfen.')}
+            aria-label="A) Thema klären"
+          >
+            A) 🧭 Thema klären
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="glass-subtle border border-white/40"
+            disabled={isLoading || isGeneratingStory || isGeneratingPanels || isRegeneratingPanel}
+            onClick={() => setInputValue(prev => prev ? `${prev} Ziel der Story: ` : 'Ziel der Story: ')}
+            aria-label="B) Ziel definieren"
+          >
+            B) 🎯 Ziel definieren
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            className="glass-subtle border border-white/40"
+            disabled={isGeneratingPanels || isLoading || !characterProfile}
+            onClick={handleProposeStory}
+            aria-label="C) Storyboard vorschlagen"
+          >
+            C) 🧩 Storyboard vorschlagen
+          </Button>
+
+          <Button
+            type="button"
+            size="sm"
+            className="glass-subtle border border-white/40"
+            disabled={!isStoryboardReady || isGeneratingStory}
+            onClick={handleGenerateImages}
+            aria-label="D) Bilder generieren"
+          >
+            D) 🖼️ Bilder generieren
+          </Button>
+        </div>
         <div className="flex gap-2">
           <Textarea
             value={inputValue}

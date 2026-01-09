@@ -168,18 +168,29 @@ export function MainApp() {
   // View: Session Select
   if (currentView === 'session-select') {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto space-y-8">
-          {/* Header mit Gradient */}
-          <div className="text-center space-y-4 py-12">
-            <div className="inline-block px-6 py-3 bg-gradient-warm rounded-2xl shadow-soft mb-4">
-              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary-strong">
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-10 md:space-y-12">
+          {/* Apple-Style Hero Header with Glass & Gradient for readability */}
+          <div className="relative overflow-hidden rounded-3xl shadow-apple-lg hero-gradient p-[1px]">
+            <div className="glass-card rounded-3xl text-center space-y-5 md:space-y-6 py-10 md:py-16">
+              <h1 className="text-5xl md:text-7xl font-semibold text-apple-title tracking-tight title-readable text-gradient-warm">
                 Comic Panel Generator
               </h1>
+              <p className="text-base md:text-xl text-apple-body text-muted-foreground max-w-xl md:max-w-2xl mx-auto leading-relaxed subtitle-readable">
+                Erstelle AI-generierte Comic-Stories mit deinem Character
+              </p>
+              <div className="flex justify-center gap-2 md:gap-3 pt-3 md:pt-4">
+                <span className="inline-flex items-center px-3 py-1.5 md:px-4 md:py-2 glass-subtle text-xs md:text-sm font-semibold rounded-full text-foreground">
+                  ✨ AI-Powered
+                </span>
+                <span className="inline-flex items-center px-3 py-1.5 md:px-4 md:py-2 glass-subtle text-xs md:text-sm font-semibold rounded-full text-foreground">
+                  🎨 Character Consistency
+                </span>
+                <span className="inline-flex items-center px-3 py-1.5 md:px-4 md:py-2 glass-subtle text-xs md:text-sm font-semibold rounded-full text-foreground">
+                  🚀 Instant Generation
+                </span>
+              </div>
             </div>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Erstelle AI-generierte Comic-Stories mit deinem Character ✨
-            </p>
           </div>
 
           <ChatSessionManager onSessionSelected={handleSessionSelected} />
@@ -188,9 +199,9 @@ export function MainApp() {
             <div className="text-center">
               <button
                 onClick={() => setCurrentView('profile-setup')}
-                className="text-sm text-primary hover:text-primary-strong underline transition-smooth"
+                className="text-sm text-primary hover:text-primary-strong font-medium transition-smooth"
               >
-                Character Profile bearbeiten
+                Character Profile bearbeiten →
               </button>
             </div>
           )}
@@ -202,19 +213,19 @@ export function MainApp() {
   // View: Chat
   if (currentView === 'chat' && currentSession) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* Modern Header with Card */}
-          <div className="bg-card rounded-2xl shadow-elegant p-6 border border-border">
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-6 md:space-y-8">
+          {/* Apple-Style Glassmorphism Header */}
+          <div className="glass-card rounded-3xl shadow-apple-lg p-5 md:p-8 hover-lift">
             <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <h1 className="text-3xl font-bold text-foreground">{currentSession.title}</h1>
+              <div className="space-y-2">
+                <h1 className="text-3xl md:text-5xl font-semibold text-apple-title title-readable text-foreground tracking-tight">{currentSession.title}</h1>
                 {currentSession.tags.length > 0 && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5 md:gap-2 pt-1">
                     {currentSession.tags.map((tag, i) => (
                       <span
                         key={i}
-                        className="inline-block px-3 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full"
+                        className="inline-flex items-center px-2.5 py-1 text-[11px] md:text-xs font-semibold bg-primary/15 text-primary rounded-full border border-primary/20"
                       >
                         #{tag}
                       </span>
@@ -224,13 +235,13 @@ export function MainApp() {
               </div>
 
               <div className="flex items-center gap-4">
-                {/* AI-Modell Auswahl (TEST) */}
-                <div className="flex items-center gap-3 bg-accent/30 px-4 py-2 rounded-xl border border-border">
-                  <span className="text-sm font-medium text-foreground">🧪 Modell:</span>
+                {/* AI-Modell Auswahl - Apple Style */}
+                <div className="glass-subtle flex items-center gap-3 px-5 py-3 rounded-2xl border border-white/30">
+                  <span className="text-sm font-semibold text-foreground">🧪 Modell</span>
                   <select
                     value={characterProfile?.aiModel || 'nano-banana-pro'}
                     onChange={(e) => handleAiModelChange(e.target.value as KieAiModel)}
-                    className="px-3 py-2 rounded-lg border border-input bg-card text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary transition-smooth"
+                    className="px-4 py-2 rounded-xl bg-white/80 border border-white/50 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all backdrop-blur-sm"
                   >
                     <option value="nano-banana-pro">Imagen 4 ✅</option>
                     <option value="flux-2">Flux.2</option>
@@ -242,7 +253,7 @@ export function MainApp() {
 
                 <button
                   onClick={handleBackToSessionSelect}
-                  className="px-4 py-2 text-sm font-medium text-primary hover:text-primary-strong hover:bg-primary/5 rounded-lg transition-smooth"
+                  className="px-5 py-2.5 text-sm font-semibold text-primary hover:text-primary-strong hover:bg-primary/10 rounded-xl transition-all"
                 >
                   ← Zurück
                 </button>
