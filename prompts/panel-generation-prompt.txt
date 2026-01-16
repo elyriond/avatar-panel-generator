@@ -8,6 +8,17 @@ WICHTIG: Falls die Nutzerin im Gespräch eine bestimmte Anzahl an Panels gewüns
 Für jedes Panel brauche ich:
 1. `text`: Der Text, der im Bild steht (auf DEUTSCH).
 2. `scene`: Eine detaillierte bildliche Szenenbeschreibung (auf ENGLISCH).
+3. `characters`: Ein Array mit den Namen der Charaktere, die in diesem Panel erscheinen.
+
+VERFÜGBARE CHARAKTERE:
+- "Theresa" (Hauptcharakter, Therapeutin)
+- "Ben" (Theresas Freund, optional)
+
+WICHTIG - Charaktere entscheiden:
+- Die meisten Panels sollten nur Theresa zeigen: ["Theresa"]
+- Wenn Ben im Gespräch erwähnt wurde oder ein Dialog zwischen beiden sinnvoll ist, kannst du ihn hinzufügen: ["Theresa", "Ben"]
+- Du kannst auch Panels haben, die nur Ben zeigen: ["Ben"]
+- Entscheide selbstständig basierend auf der Story, welche Charaktere pro Panel Sinn machen
 
 ANFORDERUNGEN:
 - Text-Sprache: Deutsch (Warm, nahbar, professionell)
@@ -21,11 +32,18 @@ Beispiel:
 [
   {
     "text": "Manchmal fühlt sich alles zu viel an...",
-    "scene": "Close-up of the face, eyes closed, hand on forehead, expression of exhaustion."
+    "scene": "Close-up of the face, eyes closed, hand on forehead, expression of exhaustion.",
+    "characters": ["Theresa"]
   },
   {
-    "text": "Aber das ist okay.",
-    "scene": "Medium shot, she is taking a deep breath, shoulders dropping, relaxed facial expression."
+    "text": "Mein Freund hilft mir dann, das zu sortieren.",
+    "scene": "Two people in conversation, Theresa listening, Ben speaking with calm gestures.",
+    "characters": ["Theresa", "Ben"]
+  },
+  {
+    "text": "Und dann sehe ich wieder klarer.",
+    "scene": "Medium shot, she is taking a deep breath, shoulders dropping, relaxed facial expression.",
+    "characters": ["Theresa"]
   }
 ]
 Antworte NUR mit dem JSON-Array. Keine Markdown-Formatierung wie ```json.

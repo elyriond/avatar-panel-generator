@@ -11,6 +11,7 @@ export interface StoryPanel {
   id: string
   panelNumber: number                 // 1, 2, 3, etc.
   panelText: string                   // Der Text im Panel
+  sceneDescription?: string           // Für Regenerierung: Die ursprüngliche Scene-Beschreibung
   avatarBase64: string                // Generierter Avatar
   imagePrompt: string                 // Der verwendete Imagen-Prompt
   backgroundColor: string             // Hintergrundfarbe
@@ -32,12 +33,17 @@ export interface ComicStory {
   chatSessionId?: string              // Aus welcher Chat-Session entstand die Story
   tags: string[]                      // z.B. ["Hochsensibilität", "Grenzen"]
 
+  // Storyboard (für Regenerierung und Referenz)
+  originalStoryboard?: Array<{ text: string; scene: string }>  // Das ursprüngliche Storyboard-JSON
+
   // Status
   status: 'draft' | 'completed' | 'published'
 
   // Instagram-specific
   instagramPosted?: boolean
   instagramPostDate?: Date
+  instagramCaption?: string           // Auto-generierte Caption für Instagram
+  instagramHashtags?: string          // Auto-generierte Hashtags für Instagram
 }
 
 /**
@@ -105,6 +111,9 @@ export async function createStory(
     characterProfileId?: string
     chatSessionId?: string
     tags?: string[]
+    originalStoryboard?: Array<{ text: string; scene: string }>
+    instagramCaption?: string
+    instagramHashtags?: string
   }
 ): Promise<ComicStory> {
   const now = new Date()
@@ -124,6 +133,9 @@ export async function createStory(
     characterProfileId: options?.characterProfileId,
     chatSessionId: options?.chatSessionId,
     tags: options?.tags || [],
+    originalStoryboard: options?.originalStoryboard,  // Speichere das ursprüngliche Storyboard
+    instagramCaption: options?.instagramCaption,      // Speichere Instagram Caption
+    instagramHashtags: options?.instagramHashtags,    // Speichere Instagram Hashtags
     status: 'completed',
     instagramPosted: false
   }

@@ -61,6 +61,13 @@ npm run dev
 
 Öffne **http://localhost:5173/** im Browser.
 
+### Terminal Basics (nervensystemfreundlich)
+- Du brauchst keinen Login (Anmeldung). Beenden = `Ctrl + C` (Abbrechen) oder `exit` (Beenden).
+- Wieder einsteigen: Terminal öffnen → `cd` ins Projekt → `npm run dev`.
+- Spickzettel mit ruhiger Schritt‑für‑Schritt‑Anleitung: siehe `docs/TERMINAL-CHEATSHEET.md`.
+
+![Wieder einsteigen – 4 Schritte](docs/wieder-einsteigen-box.svg)
+
 ---
 
 ## 📖 Anleitung

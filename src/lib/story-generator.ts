@@ -3,7 +3,7 @@
  * Sequential generation of avatars to allow recursive character referencing
  */
 
-import { generateImagePrompt, type PanelData } from './chat-helper'
+import { generateImagePrompt, interpretFeedbackForSceneImprovement, type PanelData } from './chat-helper'
 import {
   generateComicAvatar,
   extractReferenceImagesFromProfile
@@ -12,6 +12,7 @@ import type { CharacterProfile } from './character-profile'
 import type { StoryPanel } from './story-persistence'
 import { logger } from './logger'
 import { uploadImagesToImgbb } from './imgbb-uploader'
+import { getCharacterProfiles } from './character-registry'
 
 export interface PanelGenerationProgress {
   currentPanel: number
@@ -24,52 +25,47 @@ export interface PanelGenerationProgress {
 export type ProgressCallback = (progress: PanelGenerationProgress) => void
 
 /**
- * Lädt Ben's Referenzbild, wenn "Freund" in der Scene Description vorkommt
+ * Lädt Referenzbilder für ein Character-Profile
+ * Wenn referenceImagePaths gesetzt ist, lädt die Bilder aus public/
+ * Für Ben: Spezieller Pfad zu /Avatare/Ben/
  */
-async function loadBenReferenceIfNeeded(sceneDescription: string): Promise<string[]> {
-  // Prüfe ob "Freund" (case-insensitive) in der Scene Description vorkommt
-  const needsBen = /\bfreund\b/i.test(sceneDescription)
-
-  if (!needsBen) {
-    logger.debug('Ben nicht benötigt in dieser Scene', { component: 'StoryGenerator' })
-    return []
-  }
-
-  logger.info('Ben wird in dieser Scene benötigt, lade Referenzbild...', { component: 'StoryGenerator' })
+async function loadCharacterReferences(profile: CharacterProfile): Promise<string[]> {
+  logger.info(`Lade Referenzbilder für ${profile.name}...`, { component: 'StoryGenerator' })
 
   try {
-    // Lade Ben's Referenzbild
-    const benImagePath = '/Avatare/Winkel /Ben.jpg'
-    const response = await fetch(benImagePath)
+    // Spezialbehandlung für Ben (liegt in /Avatare/Ben/)
+    if (profile.name === 'Ben') {
+      const benImagePath = '/Avatare/Ben/Extreme close-up comic.jpg'
 
-    if (!response.ok) {
-      throw new Error(`Konnte Ben's Bild nicht laden: ${response.status}`)
+      const response = await fetch(benImagePath)
+      if (!response.ok) {
+        throw new Error(`Konnte Ben's Bild nicht laden: ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(blob)
+      })
+
+      // Upload zu imgbb (nur einmal)
+      const urls = await uploadImagesToImgbb([base64])
+      const benUrl = urls[0]
+
+      // Verwende dasselbe Bild 4x (maximale Consistency)
+      return [benUrl, benUrl, benUrl, benUrl]
     }
 
-    const blob = await response.blob()
+    // Für andere Charaktere: Normale Lade-Logik
+    return await extractReferenceImagesFromProfile(profile)
 
-    // Konvertiere zu Base64
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onloadend = () => resolve(reader.result as string)
-      reader.onerror = reject
-      reader.readAsDataURL(blob)
-    })
-
-    // Upload zu imgbb und erhalte URL
-    const urls = await uploadImagesToImgbb([base64])
-    logger.info('Ben Referenzbild erfolgreich geladen und hochgeladen', {
-      component: 'StoryGenerator',
-      data: { url: urls[0] }
-    })
-
-    return urls
   } catch (error) {
-    logger.error('Fehler beim Laden von Ben\'s Referenzbild', {
+    logger.error(`Fehler beim Laden von ${profile.name}'s Referenzbildern`, {
       component: 'StoryGenerator',
       data: error
     })
-    // Bei Fehler: Weiter ohne Ben's Bild
     return []
   }
 }
@@ -84,94 +80,158 @@ export async function generateCompleteStory(
   onProgress?: ProgressCallback
 ): Promise<Omit<StoryPanel, 'id' | 'generatedAt'>[]> {
 
-  logger.info('Starte sequentielle Story-Generierung', {
+  logger.info('Starte parallele Story-Generierung mit dynamischen Character-Profilen', {
     component: 'StoryGenerator',
     data: { panelCount: panelDataList.length }
   })
 
   const totalPanels = panelDataList.length
   const panels: Omit<StoryPanel, 'id' | 'generatedAt'>[] = []
-  
-  // Start-Referenzen aus dem Profil (das sind bereits URLs)
-  let currentReferenceUrls = await extractReferenceImagesFromProfile(characterProfile)
+
+  // ============================================================================
+  // OPTIMIZATION: Lade & cache alle benötigten Character-Profile NUR EINMAL
+  // ============================================================================
+
+  logger.info('Analysiere benötigte Charaktere...', { component: 'StoryGenerator' })
+
+  // Sammle alle verwendeten Charaktere aus allen Panels
+  const allCharacters = new Set<string>()
+  panelDataList.forEach(panel => {
+    if (panel.characters && Array.isArray(panel.characters)) {
+      panel.characters.forEach(char => allCharacters.add(char))
+    }
+  })
+
+  logger.info(`Gefundene Charaktere: ${Array.from(allCharacters).join(', ')}`, {
+    component: 'StoryGenerator'
+  })
+
+  // Lade alle benötigten Character-Profile
+  const characterProfiles = getCharacterProfiles(Array.from(allCharacters))
+  const characterProfileMap = new Map(
+    characterProfiles.map(profile => [profile.name, profile])
+  )
+
+  // Lade und cache Referenzbilder für alle Charaktere
+  const characterReferencesMap = new Map<string, string[]>()
+
+  for (const profile of characterProfiles) {
+    logger.info(`Lade Referenzen für ${profile.name}...`, { component: 'StoryGenerator' })
+    const refs = await loadCharacterReferences(profile)
+    characterReferencesMap.set(profile.name, refs)
+  }
+
+  logger.info('✅ Alle Character-Referenzen gecached', {
+    component: 'StoryGenerator',
+    data: {
+      characters: Array.from(characterReferencesMap.keys()),
+      refCounts: Array.from(characterReferencesMap.entries()).map(([name, refs]) => ({
+        name,
+        count: refs.length
+      }))
+    }
+  })
+
+  // ============================================================================
+  // Panel Generation - PARALLEL für maximale Geschwindigkeit! 🚀
+  // ============================================================================
 
   try {
-    for (let i = 0; i < totalPanels; i++) {
-      const panelData = panelDataList[i]
+    onProgress?.({
+      currentPanel: 0,
+      totalPanels,
+      status: 'generating_prompts',
+      message: `Generiere Prompts für ${totalPanels} Panels...`,
+      generatedPanels: 0
+    })
+
+    // Generiere alle Panels parallel
+    let completedPanels = 0
+
+    const panelPromises = panelDataList.map(async (panelData, i) => {
       const panelNumber = i + 1
 
+      // Context für dieses Panel (alle vorherigen Panels in der geplanten Story)
       const previousContext = panelDataList
         .slice(0, i)
         .map((p, idx) => `Panel ${idx + 1}: ${p.scene}`)
         .join('\n')
 
-      onProgress?.({
-        currentPanel: panelNumber,
-        totalPanels,
-        status: 'generating_prompts',
-        message: `Plane Panel ${panelNumber}/${totalPanels}...`,
-        generatedPanels: i
-      })
+      // Generiere Image-Prompt MIT Character-Profilen
+      const imagePrompt = await generateImagePrompt(
+        panelData,
+        previousContext,
+        characterProfileMap  // Übergebe Character-Profile für Beschreibungen
+      )
 
-      const imagePrompt = await generateImagePrompt(panelData, previousContext)
+      // Sammle Referenzbilder für alle Charaktere in diesem Panel
+      const panelCharacters = panelData.characters || ['Theresa'] // Fallback auf Theresa
+      let activeRefs: string[] = []
 
-      onProgress?.({
-        currentPanel: panelNumber,
-        totalPanels,
-        status: 'generating_avatars',
-        message: `Zeichne Panel ${panelNumber}/${totalPanels}...`,
-        generatedPanels: i
-      })
-
-      // Wir nehmen die Kern-Referenzen + die letzten 2 generierten Panel-URLs
-      // (Priorität: Neueste zuerst)
-      let activeRefs = [...currentReferenceUrls].slice(0, 8)
-
-      // WICHTIG: Prüfe ob Ben (Freund) in dieser Scene vorkommt
-      const benRefs = await loadBenReferenceIfNeeded(panelData.scene)
-      if (benRefs.length > 0) {
-        // Ben's Bild hinzufügen (mit Priorität, daher am Anfang)
-        activeRefs = [...benRefs, ...activeRefs]
-        // Limit auf 8 Bilder beachten
-        if (activeRefs.length > 8) {
-          activeRefs = activeRefs.slice(0, 8)
+      for (const charName of panelCharacters) {
+        const refs = characterReferencesMap.get(charName)
+        if (refs && refs.length > 0) {
+          activeRefs.push(...refs)
         }
       }
 
+      // Limit auf 8 Bilder (KIE.AI Max)
+      activeRefs = activeRefs.slice(0, 8)
+
+      logger.debug(`Panel ${panelNumber}: ${panelCharacters.join(' + ')} (${activeRefs.length} refs)`, {
+        component: 'StoryGenerator',
+        data: { characters: panelCharacters }
+      })
+
+      // Hole AI-Modell vom ersten Character-Profile (oder default)
+      const firstCharProfile = characterProfileMap.get(panelCharacters[0])
+      const aiModel = firstCharProfile?.aiModel || characterProfile.aiModel || 'nano-banana-pro'
+
+      // Generiere Avatar
       const result = await generateComicAvatar(
         imagePrompt,
         activeRefs,
         (progress, status) => {
           logger.debug(`Panel ${panelNumber}: ${status} (${progress}%)`)
         },
-        characterProfile.aiModel  // Verwende ausgewähltes Modell aus Profil (default: nano-banana-pro)
+        aiModel
       )
 
-      // WICHTIG: Wir deaktivieren das recursive Referencing, um den "Drift" zu verhindern.
-      // Wir nutzen für JEDES Panel nur die originalen Referenzbilder.
-      // currentReferenceUrls = [result.url, ...currentReferenceUrls]
-
-      panels.push({
-        panelNumber,
-        panelText: panelData.text,
-        avatarBase64: result.base64,
-        imagePrompt,
-        backgroundColor
-      })
-
+      // Progress-Update nach jedem fertigen Panel
+      completedPanels++
       onProgress?.({
         currentPanel: panelNumber,
         totalPanels,
-        status: i === totalPanels - 1 ? 'completed' : 'generating_avatars',
-        message: `Panel ${panelNumber} fertig!`,
-        generatedPanels: panelNumber
+        status: completedPanels === totalPanels ? 'completed' : 'generating_avatars',
+        message: `Panel ${panelNumber} fertig! (${completedPanels}/${totalPanels})`,
+        generatedPanels: completedPanels
       })
-    }
 
-    return panels
+      return {
+        panelNumber,
+        panelText: panelData.text,
+        sceneDescription: panelData.scene,
+        avatarBase64: result.base64,
+        imagePrompt,
+        backgroundColor
+      }
+    })
+
+    onProgress?.({
+      currentPanel: 0,
+      totalPanels,
+      status: 'generating_avatars',
+      message: `Generiere ${totalPanels} Panels parallel...`,
+      generatedPanels: 0
+    })
+
+    // Warte auf alle Panels (parallel!)
+    const generatedPanels = await Promise.all(panelPromises)
+
+    return generatedPanels
 
   } catch (error) {
-    logger.error('Fehler bei sequentieller Generierung', { component: 'StoryGenerator', data: error })
+    logger.error('Fehler bei paralleler Panel-Generierung', { component: 'StoryGenerator', data: error })
     onProgress?.({
       currentPanel: 0,
       totalPanels,
@@ -184,14 +244,20 @@ export async function generateCompleteStory(
 }
 
 /**
- * Schätzt die Generierungsdauer
+ * Schätzt die Generierungsdauer (parallel!)
+ * Bei paralleler Generierung hängt die Zeit hauptsächlich vom langsamsten Panel ab,
+ * nicht von der Summe aller Panels
  */
 export function estimateGenerationTime(panelCount: number): {
   seconds: number
   formattedTime: string
 } {
-  const timePerPanel = 25
-  const totalSeconds = panelCount * timePerPanel
+  // Bei paralleler Generierung: ~30-60s für alle Panels gleichzeitig
+  // Plus etwas mehr bei vielen Panels (Queue-Wartezeit)
+  const baseTime = 40 // Basiszeit für parallel
+  const queueOverhead = Math.floor(panelCount / 3) * 10 // Etwas mehr bei vielen Panels
+  const totalSeconds = baseTime + queueOverhead
+
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return {
@@ -227,27 +293,48 @@ export async function regenerateSinglePanel(
   // Image-Prompt generieren (mit Feedback falls vorhanden)
   let sceneDescription = panelData.scene
   if (userFeedback) {
-    sceneDescription = `${panelData.scene}. User feedback: ${userFeedback}`
+    // KI interpretiert das Feedback und verbessert die Scene Description
+    logger.info('Interpretiere User-Feedback mit KI...', {
+      component: 'StoryGenerator',
+      data: { feedback: userFeedback.substring(0, 50) }
+    })
+    sceneDescription = await interpretFeedbackForSceneImprovement(panelData.scene, userFeedback)
+    logger.info('Scene Description verbessert durch KI-Interpretation', {
+      component: 'StoryGenerator',
+      data: {
+        originalLength: panelData.scene.length,
+        improvedLength: sceneDescription.length
+      }
+    })
   }
 
-  const imagePrompt = await generateImagePrompt(
-    { text: panelData.text, scene: sceneDescription },
-    previousContext
+  // Hole Characters aus PanelData (oder Fallback auf Theresa)
+  const panelCharacters = panelData.characters || ['Theresa']
+
+  // Lade Character-Profile
+  const characterProfiles = getCharacterProfiles(panelCharacters)
+  const characterProfileMap = new Map(
+    characterProfiles.map(profile => [profile.name, profile])
   )
 
-  // Referenzen holen
-  let referenceUrls = await extractReferenceImagesFromProfile(characterProfile)
+  const imagePrompt = await generateImagePrompt(
+    { text: panelData.text, scene: sceneDescription, characters: panelCharacters },
+    previousContext,
+    characterProfileMap
+  )
 
-  // WICHTIG: Prüfe ob Ben (Freund) in dieser Scene vorkommt
-  const benRefs = await loadBenReferenceIfNeeded(panelData.scene)
-  if (benRefs.length > 0) {
-    // Ben's Bild hinzufügen (mit Priorität, daher am Anfang)
-    referenceUrls = [...benRefs, ...referenceUrls]
-    // Limit auf 8 Bilder beachten
-    if (referenceUrls.length > 8) {
-      referenceUrls = referenceUrls.slice(0, 8)
+  // Sammle Referenzen für alle Charaktere
+  let referenceUrls: string[] = []
+  for (const charName of panelCharacters) {
+    const profile = characterProfileMap.get(charName)
+    if (profile) {
+      const refs = await loadCharacterReferences(profile)
+      referenceUrls.push(...refs)
     }
   }
+
+  // Limit auf 8 Bilder
+  referenceUrls = referenceUrls.slice(0, 8)
 
   // Avatar generieren
   const result = await generateComicAvatar(
@@ -260,9 +347,147 @@ export async function regenerateSinglePanel(
   return {
     panelNumber,
     panelText: panelData.text,
+    sceneDescription: sceneDescription,  // Speichere modifizierte Scene (mit Feedback) für weitere Edits
     avatarBase64: result.base64,
     imagePrompt,
     backgroundColor
+  }
+}
+
+/**
+ * 🎲 Würfelt ein Panel neu mit STRIKTER Referenz-Einhaltung
+ * Kein User-Feedback, einfach nochmal generieren mit extra-verstärktem "FOLLOW REFERENCE!" Befehl
+ *
+ * Use-Case: Panel sieht nicht aus wie Referenzbild → Einfach nochmal versuchen
+ */
+export async function rerollPanelStrictReference(
+  panelIndex: number,
+  panelData: PanelData,
+  allPanelData: PanelData[],
+  characterProfile: CharacterProfile,
+  backgroundColor: string = '#e8dfd0'
+): Promise<Omit<StoryPanel, 'id' | 'generatedAt'>> {
+  logger.info('🎲 Würfle Panel neu mit STRIKTER Referenz-Einhaltung', {
+    component: 'StoryGenerator',
+    data: { panelIndex, panelNumber: panelIndex + 1 }
+  })
+
+  // Rufe regenerateSinglePanel MIT speziellem Feedback auf
+  // Das Feedback signalisiert: "Maximale Referenz-Treue!"
+  const strictReferenceFeedback =
+    "CRITICAL: The generated image does NOT match the reference images closely enough. " +
+    "Character consistency is FAILING. " +
+    "Regenerate with MAXIMUM adherence to reference images. " +
+    "Copy the EXACT facial features, proportions, and characteristics from the reference images. " +
+    "This is a STRICT REFERENCE MODE retry."
+
+  return regenerateSinglePanel(
+    panelIndex,
+    panelData,
+    allPanelData,
+    characterProfile,
+    backgroundColor,
+    strictReferenceFeedback
+  )
+}
+
+/**
+ * Editiert ein Panel via Image-to-Image Editing
+ * Verwendet das aktuelle Panel-Bild als Basis und modifiziert es basierend auf dem User-Prompt
+ */
+export async function editPanelWithImageToImage(
+  currentPanelBase64: string,
+  modificationPrompt: string,
+  characterProfile: CharacterProfile,
+  originalPanelText: string,
+  backgroundColor: string = '#e8dfd0',
+  prioritizeOriginalReferences: boolean = false  // Für Reroll: Original-Referenzen ZUERST
+): Promise<Omit<StoryPanel, 'id' | 'generatedAt'>> {
+  logger.info('Starte Image-to-Image Panel-Editing', {
+    component: 'StoryGenerator',
+    data: {
+      promptLength: modificationPrompt.length,
+      hasCurrentImage: !!currentPanelBase64,
+      prioritizeOriginalReferences
+    }
+  })
+
+  try {
+    // 1. Hole Character-Referenzen (für Konsistenz)
+    const characterReferenceUrls = await extractReferenceImagesFromProfile(characterProfile)
+
+    // 2. Upload aktuelles Panel-Bild zu imgbb (nur wenn nicht Reroll)
+    let referenceUrls: string[]
+
+    if (prioritizeOriginalReferences) {
+      // REROLL-MODUS: Nur Original-Referenzen, KEIN aktuelles Panel
+      // Dies zwingt Imagen, sich an den Original-Referenzen zu orientieren
+      referenceUrls = characterReferenceUrls.slice(0, 8)
+
+      logger.info('Reroll-Modus: Verwende NUR Original-Referenzen', {
+        component: 'StoryGenerator',
+        data: {
+          totalRefs: referenceUrls.length,
+          currentImageIncluded: false
+        }
+      })
+    } else {
+      // EDIT-MODUS: Aktuelles Bild ZUERST (höchste Priorität), dann Character-Referenzen
+      logger.info('Lade aktuelles Panel-Bild zu imgbb hoch...', { component: 'StoryGenerator' })
+      const currentImageUrls = await uploadImagesToImgbb([currentPanelBase64])
+      const currentImageUrl = currentImageUrls[0]
+
+      referenceUrls = [currentImageUrl, ...characterReferenceUrls].slice(0, 8)
+
+      logger.info('Edit-Modus: Aktuelles Bild hat Priorität', {
+        component: 'StoryGenerator',
+        data: {
+          totalRefs: referenceUrls.length,
+          currentImageFirst: true
+        }
+      })
+    }
+
+    // 3. Generiere modifiziertes Bild mit dem User-Prompt
+    const result = await generateComicAvatar(
+      modificationPrompt,
+      referenceUrls,
+      undefined,  // kein progress callback
+      characterProfile.aiModel
+    )
+
+    logger.info('Panel erfolgreich via Image-to-Image editiert', {
+      component: 'StoryGenerator',
+      data: { imageUrl: result.url }
+    })
+
+    // 5. Extrahiere neuen Panel-Text aus dem Prompt (falls geändert)
+    // Der Prompt könnte "Change text from 'X' to 'Y'" enthalten
+    let newPanelText = originalPanelText
+    const textChangeMatch = modificationPrompt.match(/change text from ['"](.+?)['"] to ['"](.+?)['"]/i)
+    if (textChangeMatch) {
+      newPanelText = textChangeMatch[2]
+      logger.info('Panel-Text aus Prompt extrahiert', {
+        component: 'StoryGenerator',
+        data: { oldText: textChangeMatch[1], newText: newPanelText }
+      })
+    }
+
+    return {
+      panelNumber: 1, // Wird von MainApp überschrieben
+      panelText: newPanelText,
+      sceneDescription: modificationPrompt,  // Speichere den Modifikations-Prompt
+      avatarBase64: result.base64,
+      imagePrompt: modificationPrompt,
+      backgroundColor
+    }
+
+  } catch (error) {
+    logger.error('Fehler beim Image-to-Image Panel-Editing', {
+      component: 'StoryGenerator',
+      data: error
+    })
+    throw error
   }
 }
 

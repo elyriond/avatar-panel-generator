@@ -5,6 +5,7 @@
 
 import { logger } from './logger'
 import { uploadImagesToImgbb } from './imgbb-uploader'
+import { compressBase64Image } from './image-compression'
 
 const API_KEY = import.meta.env.VITE_KIE_AI_API_KEY
 const API_BASE_URL = 'https://api.kie.ai/api/v1/jobs'
@@ -359,19 +360,30 @@ export async function waitForTaskCompletion(
 }
 
 /**
- * Konvertiert eine Bild-URL zu Base64
+ * Konvertiert eine Bild-URL zu Base64 (mit Kompression für Speicher-Effizienz)
  */
 async function urlToBase64(url: string): Promise<string> {
   try {
     const response = await fetch(url)
     const blob = await response.blob()
 
-    return new Promise((resolve, reject) => {
+    // Erst zu Base64 konvertieren
+    const rawBase64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onloadend = () => resolve(reader.result as string)
       reader.onerror = reject
       reader.readAsDataURL(blob)
     })
+
+    // Dann komprimieren (800x800px, 80% Qualität)
+    // Das reduziert die Dateigröße um ~80-90% ohne sichtbaren Qualitätsverlust
+    const compressed = await compressBase64Image(rawBase64, {
+      maxWidth: 800,
+      maxHeight: 800,
+      quality: 0.8
+    })
+
+    return compressed
   } catch (error) {
     logger.error('Fehler beim Konvertieren von URL zu Base64', {
       component: 'KieAiImage',
@@ -398,7 +410,8 @@ export async function generateComicAvatar(
   prompt: string,
   referenceImages: string[],
   onProgress?: (progress: number, status: string) => void,
-  model?: KieAiModel
+  model?: KieAiModel,
+  maxRetries: number = 2
 ): Promise<{ base64: string, url: string }> {
   const selectedModel = model || 'nano-banana-pro'
 
@@ -407,78 +420,119 @@ export async function generateComicAvatar(
     data: {
       model: selectedModel,
       promptLength: prompt.length,
-      referenceImageCount: referenceImages.length
+      referenceImageCount: referenceImages.length,
+      maxRetries
     }
   })
 
-  try {
-    // Validierung
-    if (referenceImages.length === 0) {
-      throw new Error('Mindestens ein Referenzbild erforderlich')
-    }
-
-    // SICHERHEIT: Alle Base64-Referenzen zu imgbb hochladen
-    const base64ImagesToUpload = referenceImages.filter(img => img.startsWith('data:') || (img.length > 500 && !img.startsWith('http')))
-    const existingUrls = referenceImages.filter(img => img.startsWith('http'))
-    
-    let finalReferenceUrls = [...existingUrls]
-    
-    if (base64ImagesToUpload.length > 0) {
-      logger.info(`Lade ${base64ImagesToUpload.length} neue Referenzbilder zu imgbb hoch...`)
-      const newUrls = await uploadImagesToImgbb(base64ImagesToUpload)
-      finalReferenceUrls = [...newUrls, ...finalReferenceUrls]
-    }
-
-    if (finalReferenceUrls.length > 8) {
-      finalReferenceUrls = finalReferenceUrls.slice(0, 8)
-    }
-
-    // 1. Task erstellen
-    const taskResponse = await createImageTask({
-      prompt,
-      referenceImages: finalReferenceUrls,
-      aspectRatio: '1:1',
-      resolution: '1K',
-      outputFormat: 'jpg',
-      negativePrompt: 'realistic photo, photograph, 3d render, ugly, deformed, blurry, low quality',
-      model: selectedModel  // Verwende das ausgewählte Modell (default: nano-banana-pro)
-    })
-
-    if (!taskResponse.success) {
-      throw new Error(`Task creation failed: ${taskResponse.message}`)
-    }
-
-    // 2. Auf Completion warten
-    const images = await waitForTaskCompletion(
-      taskResponse.taskId,
-      onProgress,
-      300000 // 5 Minuten Timeout (Bildgenerierung kann 3-5 Min dauern)
-    )
-
-    if (images.length === 0) {
-      throw new Error('Keine Bilder generiert')
-    }
-
-    // 3. Erstes Bild verarbeiten
-    const firstImage = images[0]
-    const imageUrl = firstImage.url
-
-    if (!imageUrl) {
-      throw new Error('Keine Bild-URL in der API-Antwort gefunden')
-    }
-
-    // URL zu Base64 konvertieren (für lokale Anzeige/Speicherung)
-    const base64 = await urlToBase64(imageUrl)
-
-    return { base64, url: imageUrl }
-
-  } catch (error) {
-    logger.error('Fehler bei Comic-Avatar-Generierung', {
-      component: 'KieAiImage',
-      data: error
-    })
-    throw error
+  // Validierung
+  if (referenceImages.length === 0) {
+    throw new Error('Mindestens ein Referenzbild erforderlich')
   }
+
+  // SICHERHEIT: Alle Base64-Referenzen zu imgbb hochladen (nur einmal, vor Retries)
+  const base64ImagesToUpload = referenceImages.filter(img => img.startsWith('data:') || (img.length > 500 && !img.startsWith('http')))
+  const existingUrls = referenceImages.filter(img => img.startsWith('http'))
+
+  let finalReferenceUrls = [...existingUrls]
+
+  if (base64ImagesToUpload.length > 0) {
+    logger.info(`Lade ${base64ImagesToUpload.length} neue Referenzbilder zu imgbb hoch...`)
+    const newUrls = await uploadImagesToImgbb(base64ImagesToUpload)
+    finalReferenceUrls = [...newUrls, ...finalReferenceUrls]
+  }
+
+  if (finalReferenceUrls.length > 8) {
+    finalReferenceUrls = finalReferenceUrls.slice(0, 8)
+  }
+
+  // Retry-Logik
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info(`Versuch ${attempt}/${maxRetries}`, {
+        component: 'KieAiImage',
+        data: { attempt, maxRetries }
+      })
+
+      // 1. Task erstellen
+      const taskResponse = await createImageTask({
+        prompt,
+        referenceImages: finalReferenceUrls,
+        aspectRatio: '1:1',
+        resolution: '1K',
+        outputFormat: 'jpg',
+        negativePrompt: 'realistic photo, photograph, 3d render, ugly, deformed, blurry, low quality',
+        model: selectedModel
+      })
+
+      if (!taskResponse.success) {
+        throw new Error(`Task creation failed: ${taskResponse.message}`)
+      }
+
+      // 2. Auf Completion warten (5 Minuten Timeout pro Versuch)
+      const images = await waitForTaskCompletion(
+        taskResponse.taskId,
+        onProgress,
+        300000 // 5 Minuten Timeout pro Versuch (dann Retry)
+      )
+
+      if (images.length === 0) {
+        throw new Error('Keine Bilder generiert')
+      }
+
+      // 3. Erstes Bild verarbeiten
+      const firstImage = images[0]
+      const imageUrl = firstImage.url
+
+      if (!imageUrl) {
+        throw new Error('Keine Bild-URL in der API-Antwort gefunden')
+      }
+
+      // URL zu Base64 konvertieren (für lokale Anzeige/Speicherung)
+      const base64 = await urlToBase64(imageUrl)
+
+      logger.info(`✅ Erfolgreich nach ${attempt} Versuch(en)`, {
+        component: 'KieAiImage',
+        data: { attempt }
+      })
+
+      return { base64, url: imageUrl }
+
+    } catch (error) {
+      lastError = error as Error
+
+      logger.warn(`Versuch ${attempt}/${maxRetries} fehlgeschlagen`, {
+        component: 'KieAiImage',
+        data: {
+          attempt,
+          maxRetries,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      })
+
+      // Wenn es nicht der letzte Versuch ist, warten wir kurz und versuchen es erneut
+      if (attempt < maxRetries) {
+        const waitTime = 2000 // 2 Sekunden zwischen Versuchen
+        logger.info(`⏳ Warte ${waitTime/1000}s vor erneutem Versuch...`, {
+          component: 'KieAiImage'
+        })
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+      }
+    }
+  }
+
+  // Alle Versuche fehlgeschlagen
+  logger.error('Alle Versuche fehlgeschlagen', {
+    component: 'KieAiImage',
+    data: {
+      maxRetries,
+      lastError: lastError?.message
+    }
+  })
+
+  throw lastError || new Error('Comic-Avatar-Generierung fehlgeschlagen nach allen Versuchen')
 }
 
 /**

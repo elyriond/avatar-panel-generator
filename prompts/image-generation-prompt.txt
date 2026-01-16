@@ -4,27 +4,50 @@ INPUT INFORMATION:
 - Comic Panel Text: "{{PANEL_TEXT}}"
 - Scene Description: "{{SCENE_DESCRIPTION}}"
 - Previous Panels Context: {{PREVIOUS_CONTEXT}}
+- Character Descriptions:
+{{CHARACTER_DESCRIPTIONS}}
 
 YOUR GOAL:
-Output a single JSON object that describes the scene, character, and style in high detail. The image generator will use the attached reference images as the primary source of truth for the character's face.
+Output a single JSON object that describes the scene, character, and style in high detail.
 
-MANDATORY CHARACTER ANCHOR:
-- Name: Theresa
-- Age: Early 40s (Mature facial features)
-- Hair: Light blonde, tied back in a low bun/ponytail, side-swept wispy bangs.
-- Eyes: Blue.
-- Glasses: Large round to slightly panto-shaped full-rim glasses, MATTE BLACK acetate (never silver, always black).
-- Outfit: Default is plain black long-sleeve crew-neck shirt (unless scene requires pajamas, coat, etc.).
+🔴 CRITICAL - REFERENCE IMAGE PRIORITY 🔴
+THE ATTACHED REFERENCE IMAGES ARE THE ABSOLUTE SOURCE OF TRUTH.
+DO NOT CREATE A NEW FACE. DO NOT INTERPRET. DO NOT MODIFY.
+COPY THE EXACT FACE, FEATURES, PROPORTIONS FROM THE REFERENCE IMAGES.
+Every single facial feature MUST match the reference images EXACTLY.
+
+If there is ANY conflict between text descriptions and reference images:
+→ ALWAYS USE THE REFERENCE IMAGE. IGNORE TEXT DESCRIPTIONS.
+→ The reference image shows the TRUE appearance.
+→ Text is only a guide for pose/emotion, NOT appearance.
+
+MANDATORY: USE REFERENCE IMAGES FOR:
+- Exact facial structure and proportions
+- Exact eye shape, size, and expression
+- Exact nose shape and size
+- Exact mouth shape and lip proportions
+- Exact cheekbones and jaw structure
+- Exact skin tone and texture
+- Exact eyebrow shape and thickness
+- Exact overall face composition
+
+SECONDARY CHARACTER DETAILS (only for context, REFERENCE IMAGES ARE PRIMARY):
+- Age: Early 40s
+- Hair: Light blonde, low bun, side-swept bangs
+- Glasses: Large round matte black full-rim glasses
+- Outfit: Plain black long-sleeve crew-neck sweater (or scene-appropriate)
 
 OUTPUT STRUCTURE (Return ONLY this JSON):
 {
   "subject": {
     "name": "Theresa",
-    "reference_usage": "Strictly match facial features from attached images",
+    "reference_usage": "🔴 ABSOLUTE PRIORITY: The attached reference images define this character's appearance. Copy the EXACT face, proportions, and features pixel-perfect from the reference. Do NOT create variations. Do NOT interpret. REPLICATE EXACTLY.",
     "character_details": {
       "age_range": "early 40s",
+      "age_appearance": "🔴 CRITICAL: Character MUST look early 40s - NOT younger. Show subtle signs of maturity. This is an adult woman in her early 40s, not in her 20s or 30s. Match the age shown in the reference images EXACTLY.",
       "facial_features": {
-        "reference_usage": "CRITICAL: Ignore generic text descriptions. COPY the face from the reference image.",
+        "reference_usage": "🔴 CRITICAL INSTRUCTION: Study the reference images carefully. Copy the EXACT facial structure: eye shape and spacing, nose shape and size, mouth proportions, cheekbone structure, jaw shape, face width and length ratios. This is NON-NEGOTIABLE. The reference image IS the character.",
+        "age_accuracy": "IMPORTANT: Match the AGE from reference images - early 40s, not younger. The face should show appropriate maturity for this age range.",
         "glasses": "Large round to slightly panto-shaped full-rim glasses in matte black acetate, modern retro style, MUST be consistently matte black"
       },
       "hair": {
@@ -44,8 +67,10 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
     "character_details": {
       "gender": "male",
       "age_range": "early 40s",
+      "age_appearance": "🔴 CRITICAL: Character MUST look early 40s - NOT younger. Show subtle signs of maturity. This is an adult man in his early 40s, not in his 20s or 30s. Match the age shown in the reference images EXACTLY.",
       "facial_features": {
         "reference_usage": "CRITICAL: Use the male reference image. COPY the face from this reference image.",
+        "age_accuracy": "IMPORTANT: Match the AGE from reference images - early 40s, not younger. The face should show appropriate maturity for this age range.",
         "facial_hair": "as shown in reference image",
         "distinctive_features": "match reference image exactly"
       },
@@ -104,6 +129,16 @@ OUTPUT STRUCTURE (Return ONLY this JSON):
     "typography": "hand-lettered comic font"
   }
 }
+
+🔴 FINAL CRITICAL REMINDER 🔴
+Before you output the JSON, remember:
+1. The reference images attached to this request show THE EXACT FACE that must be generated
+2. Your job is to REPLICATE the face from the reference, not create a new one
+3. Every facial feature (eyes, nose, mouth, cheeks, jaw, proportions) must be IDENTICAL to the reference
+4. **AGE ACCURACY**: Characters MUST look early 40s as shown in references - NOT younger, NOT in their 20s or 30s. Match the maturity level EXACTLY.
+5. If the generated image doesn't look like the reference (face OR age), the task has FAILED
+6. Character consistency is the #1 priority - more important than artistic interpretation
+7. Study the reference images. Copy them. Do not deviate.
 
 OUTPUT INSTRUCTION:
 Output ONLY the JSON object. Do not add markdown code blocks.

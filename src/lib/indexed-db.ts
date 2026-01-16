@@ -19,15 +19,19 @@ export interface IDBComicStory {
   characterProfileId?: string
   chatSessionId?: string
   tags: string[]
+  originalStoryboard?: Array<{ text: string; scene: string }>  // Das ursprüngliche Storyboard-JSON
   status: 'draft' | 'completed' | 'published'
   instagramPosted?: boolean
   instagramPostDate?: string
+  instagramCaption?: string
+  instagramHashtags?: string
 }
 
 export interface IDBStoryPanel {
   id: string
   panelNumber: number
   panelText: string
+  sceneDescription?: string           // Für Regenerierung: Die ursprüngliche Scene-Beschreibung
   avatarBase64: string
   imagePrompt: string
   backgroundColor: string

@@ -19,10 +19,11 @@ import {
   getOrCreateActiveChatSession,
   updateChatSession
 } from '@/lib/chat-persistence'
-import { type ComicStory } from '@/lib/story-persistence'
+import { type ComicStory, updateStory, type StoryPanel } from '@/lib/story-persistence'
 import { createAutoCharacterProfile } from '@/lib/reference-loader'
 import { logger } from '@/lib/logger'
 import { type KieAiModel } from '@/lib/kie-ai-image'
+import { editPanelWithImageToImage } from '@/lib/story-generator'
 
 type AppView = 'profile-setup' | 'session-select' | 'chat' | 'story-creator' | 'loading'
 
@@ -33,6 +34,12 @@ export function MainApp() {
   const [viewedStory, setViewedStory] = useState<ComicStory | null>(null)
   const [activeTab, setActiveTab] = useState('chat')
   const [loadingError, setLoadingError] = useState<string | null>(null)
+  const [isRegeneratingPanel, setIsRegeneratingPanel] = useState(false)
+  const [comparisonMode, setComparisonMode] = useState<{
+    panelIndex: number
+    oldPanel: Omit<StoryPanel, 'id' | 'generatedAt'>
+    newPanel: Omit<StoryPanel, 'id' | 'generatedAt'>
+  } | null>(null)
 
   // Load Character Profile on mount
   useEffect(() => {
@@ -113,6 +120,173 @@ export function MainApp() {
 
   const handleCloseStoryView = () => {
     setViewedStory(null)
+  }
+
+  const handleGalleryPanelEdit = async (panelIndex: number, userPrompt: string) => {
+    if (!viewedStory || !characterProfile) return
+
+    logger.userAction('MainApp', 'gallery_panel_edit', {
+      storyId: viewedStory.id,
+      panelIndex,
+      promptLength: userPrompt.length
+    })
+
+    setIsRegeneratingPanel(true)
+
+    try {
+      const oldPanel = viewedStory.panels[panelIndex]
+
+      // Image-to-Image Editing: Verwende aktuelles Panel-Bild als Basis
+      const updatedPanel = await editPanelWithImageToImage(
+        oldPanel.avatarBase64,
+        userPrompt,
+        characterProfile,
+        oldPanel.panelText,
+        oldPanel.backgroundColor
+      )
+
+      // Zeige Comparison Dialog
+      setComparisonMode({
+        panelIndex,
+        oldPanel: {
+          panelNumber: oldPanel.panelNumber,
+          panelText: oldPanel.panelText,
+          sceneDescription: oldPanel.sceneDescription,
+          avatarBase64: oldPanel.avatarBase64,
+          imagePrompt: oldPanel.imagePrompt,
+          backgroundColor: oldPanel.backgroundColor
+        },
+        newPanel: updatedPanel
+      })
+
+      logger.info('Panel erfolgreich via Image-to-Image editiert - warte auf User-Auswahl', {
+        component: 'MainApp',
+        data: { storyId: viewedStory.id, panelIndex }
+      })
+
+    } catch (error) {
+      logger.error('Fehler beim Bearbeiten des Panels', {
+        component: 'MainApp',
+        data: error
+      })
+      alert('Fehler beim Regenerieren des Panels. Bitte versuche es erneut.')
+    } finally {
+      setIsRegeneratingPanel(false)
+    }
+  }
+
+  const handleGalleryPanelReroll = async (panelIndex: number) => {
+    if (!viewedStory || !characterProfile) return
+
+    logger.userAction('MainApp', 'gallery_panel_reroll', {
+      storyId: viewedStory.id,
+      panelIndex
+    })
+
+    setIsRegeneratingPanel(true)
+
+    try {
+      const oldPanel = viewedStory.panels[panelIndex]
+
+      // Sweet Spot Prompt: Comic-Stil beibehalten, aber Character ähnlicher machen
+      const improvedReferenceFeedback =
+        "Regenerate this comic panel illustration with the same composition, pose, and scene. " +
+        "CRITICAL: This MUST remain a comic illustration - NOT a photograph, NOT realistic. " +
+        "Improve the character's facial features to better match the reference images: " +
+        "adjust facial structure, eye shape, nose proportions, and glasses style to be more similar to references. " +
+        "Maintain the illustrated comic art style with clean lines and soft shading. " +
+        "Keep all text, speech bubbles, and panel elements exactly as they are."
+
+      // Image-to-Image Reroll mit Sweet-Spot-Prompt
+      // Verwende aktuelles Panel für Komposition, aber betone Character-Improvement
+      const updatedPanel = await editPanelWithImageToImage(
+        oldPanel.avatarBase64,
+        improvedReferenceFeedback,
+        characterProfile,
+        oldPanel.panelText,
+        oldPanel.backgroundColor,
+        false  // Aktuelles Panel MIT verwenden, aber Prompt fokussiert auf Character-Verbesserung
+      )
+
+      // Zeige Comparison Dialog
+      setComparisonMode({
+        panelIndex,
+        oldPanel: {
+          panelNumber: oldPanel.panelNumber,
+          panelText: oldPanel.panelText,
+          sceneDescription: oldPanel.sceneDescription,
+          avatarBase64: oldPanel.avatarBase64,
+          imagePrompt: oldPanel.imagePrompt,
+          backgroundColor: oldPanel.backgroundColor
+        },
+        newPanel: updatedPanel
+      })
+
+      logger.info('Panel erfolgreich neu gewürfelt - warte auf User-Auswahl', {
+        component: 'MainApp',
+        data: { storyId: viewedStory.id, panelIndex }
+      })
+
+    } catch (error) {
+      logger.error('Fehler beim Reroll des Panels', {
+        component: 'MainApp',
+        data: error
+      })
+      alert('Fehler beim Neu-Würfeln des Panels. Bitte versuche es erneut.')
+    } finally {
+      setIsRegeneratingPanel(false)
+    }
+  }
+
+  const handleSelectPanel = async (panelIndex: number, useNew: boolean) => {
+    if (!viewedStory || !comparisonMode) return
+
+    logger.userAction('MainApp', 'select_panel_version', {
+      storyId: viewedStory.id,
+      panelIndex,
+      selectedNew: useNew
+    })
+
+    const selectedPanel = useNew ? comparisonMode.newPanel : comparisonMode.oldPanel
+
+    // Erstelle aktualisierte Story
+    const updatedStory: ComicStory = {
+      ...viewedStory,
+      panels: viewedStory.panels.map((p, idx) =>
+        idx === panelIndex
+          ? {
+              ...p,
+              panelNumber: p.panelNumber,
+              panelText: selectedPanel.panelText,
+              sceneDescription: selectedPanel.sceneDescription,
+              avatarBase64: selectedPanel.avatarBase64,
+              imagePrompt: selectedPanel.imagePrompt,
+              backgroundColor: selectedPanel.backgroundColor
+            }
+          : p
+      )
+    }
+
+    // In DB speichern
+    await updateStory(updatedStory)
+
+    // UI updaten
+    setViewedStory(updatedStory)
+    setComparisonMode(null)
+
+    logger.info(`${useNew ? 'Neue' : 'Alte'} Panel-Version gespeichert`, {
+      component: 'MainApp',
+      data: { storyId: viewedStory.id, panelIndex }
+    })
+  }
+
+  const handleGalleryRegenerateAll = () => {
+    // TODO: Implement regenerate all from gallery
+    logger.info('Regenerate All aus Galerie angefordert', {
+      component: 'MainApp',
+      data: { storyId: viewedStory?.id }
+    })
+    alert('Diese Funktion wird gerade noch implementiert. Du kannst Stories aktuell nur direkt nach der Generierung im Chat neu generieren.')
   }
 
   const handleAiModelChange = (model: KieAiModel) => {
@@ -292,10 +466,12 @@ export function MainApp() {
                   >
                     ← Zurück zur Galerie
                   </Button>
+
                   <StoryPreview
                     panels={viewedStory.panels.map(p => ({
                       panelNumber: p.panelNumber,
                       panelText: p.panelText,
+                      sceneDescription: p.sceneDescription,
                       avatarBase64: p.avatarBase64,
                       imagePrompt: p.imagePrompt,
                       backgroundColor: p.backgroundColor
@@ -306,6 +482,15 @@ export function MainApp() {
                       handleCloseStoryView()
                     }}
                     onReject={handleCloseStoryView}
+                    onRequestPanelEdit={handleGalleryPanelEdit}
+                    onRerollPanel={handleGalleryPanelReroll}
+                    onRegenerateAll={handleGalleryRegenerateAll}
+                    originalStoryboard={viewedStory.originalStoryboard}
+                    isRegenerating={isRegeneratingPanel}
+                    instagramCaption={viewedStory.instagramCaption}
+                    instagramHashtags={viewedStory.instagramHashtags}
+                    comparisonMode={comparisonMode || undefined}
+                    onSelectPanel={handleSelectPanel}
                   />
                 </div>
               ) : (

@@ -22,8 +22,9 @@ export interface ChatMessage {
 }
 
 export interface PanelData {
-  text: string
-  scene: string
+  text: string          // Deutscher Panel-Text (150-200 Zeichen)
+  scene: string         // Englische Szenen-Beschreibung für Image-Generation
+  characters: string[]  // Charaktere die in diesem Panel erscheinen (z.B. ["Theresa"], ["Theresa", "Ben"])
 }
 
 /**
@@ -182,25 +183,47 @@ export async function generatePanelsFromChat(
 
 export async function generateImagePrompt(
   panelData: PanelData,
-  previousContext: string = ''
+  previousContext: string = '',
+  characterProfiles?: Map<string, any>  // Optional: Character-Profile für Beschreibungen
 ): Promise<string> {
   logger.apiCall('gemini-2.5-flash-preview-09-2025', 'generateImagePrompt', {
     panelTextLength: panelData.text.length,
     sceneDescriptionLength: panelData.scene.length,
-    contextLength: previousContext.length
+    contextLength: previousContext.length,
+    characters: panelData.characters
   })
 
   try {
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash-preview-09-2025',
       generationConfig: { temperature: 0.7 }
     })
+
+    // Character-Beschreibungen aus Profilen extrahieren
+    let characterDescriptions = ''
+    if (panelData.characters && panelData.characters.length > 0 && characterProfiles) {
+      const descriptions = panelData.characters
+        .map((charName, index) => {
+          const profile = characterProfiles.get(charName)
+          if (profile && profile.physicalDescription) {
+            return `CHARACTER ${index + 1} - ${charName}: ${profile.physicalDescription}`
+          }
+          return null
+        })
+        .filter(Boolean)
+        .join('\n')
+
+      characterDescriptions = descriptions || 'No character descriptions available.'
+    } else {
+      characterDescriptions = 'No character information provided.'
+    }
 
     // Template-Variablen ersetzen
     const prompt = imageGenerationPromptTemplate
       .replace('{{PANEL_TEXT}}', panelData.text)
       .replace('{{SCENE_DESCRIPTION}}', panelData.scene)
       .replace('{{PREVIOUS_CONTEXT}}', previousContext || 'None (First Panel)')
+      .replace('{{CHARACTER_DESCRIPTIONS}}', characterDescriptions)
 
     const result = await model.generateContent(prompt)
     const imagePromptText = result.response.text().trim()
@@ -216,5 +239,200 @@ export async function generateImagePrompt(
       data: error
     })
     throw error
+  }
+}
+
+/**
+ * Interpretiert User-Feedback und verbessert die Scene Description
+ * Übersetzt natürliche Sprache in technische Bild-Anweisungen
+ */
+export async function interpretFeedbackForSceneImprovement(
+  currentScene: string,
+  userFeedback: string
+): Promise<string> {
+  logger.apiCall('gemini-2.5-flash-preview-09-2025', 'interpretFeedbackForSceneImprovement', {
+    currentSceneLength: currentScene.length,
+    feedbackLength: userFeedback.length
+  })
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash-preview-09-2025',
+      generationConfig: { temperature: 0.6 }  // Etwas niedriger für präzisere Interpretation
+    })
+
+    const prompt = `Du bist ein Experte für Bild-Prompt-Engineering.
+
+AKTUELLE SCENE DESCRIPTION (Englisch):
+${currentScene}
+
+USER FEEDBACK (kann Deutsch oder Englisch sein):
+"${userFeedback}"
+
+DEINE AUFGABE:
+Verstehe das User-Feedback und erstelle eine VERBESSERTE Scene Description auf Englisch, die:
+1. Die technischen Details des User-Feedbacks präzise umsetzt
+2. Die ursprüngliche Scene Description beibehält (sofern nicht widersprochen)
+3. Konkrete, umsetzbare Anweisungen für einen Image-Generator enthält
+
+BEISPIELE:
+- Feedback: "Der Avatar sieht nicht ähnlich aus"
+  → Verbessert: "${currentScene}. CRITICAL: Match facial features exactly from reference images, ensure consistent face structure, maintain glasses style."
+
+- Feedback: "Zu dunkel, bitte heller"
+  → Verbessert: "${currentScene}. Bright lighting, light background, cheerful atmosphere, avoid shadows."
+
+- Feedback: "Mehr lächeln"
+  → Verbessert: "${currentScene.replace(/expression[^.]*/, '')} Warm, genuine smile, happy facial expression, friendly demeanor."
+
+- Feedback: "Anderer Gesichtsausdruck, ernster"
+  → Verbessert: "${currentScene.replace(/expression[^.]*/, '')} Serious facial expression, focused look, professional demeanor."
+
+WICHTIG:
+- Antworte NUR mit der verbesserten Scene Description (Englisch)
+- Keine Erklärungen, kein Markdown
+- Sei konkret und technisch präzise
+- Behalte den visuellen Stil bei (comic illustration, etc.)
+
+VERBESSERTE SCENE DESCRIPTION:`
+
+    const result = await model.generateContent(prompt)
+    const improvedScene = result.response.text().trim()
+
+    logger.apiResponse('gemini-2.0-flash-exp', 200, {
+      improvedSceneLength: improvedScene.length
+    })
+
+    logger.info('Feedback interpretiert und Scene verbessert', {
+      component: 'ChatHelper',
+      data: {
+        originalLength: currentScene.length,
+        improvedLength: improvedScene.length,
+        feedback: userFeedback.substring(0, 50)
+      }
+    })
+
+    return improvedScene
+
+  } catch (error) {
+    logger.error('Fehler bei Feedback-Interpretation', {
+      component: 'ChatHelper',
+      data: error
+    })
+    // Fallback: Original Scene + Feedback anhängen
+    return `${currentScene}. User feedback: ${userFeedback}`
+  }
+}
+
+/**
+ * Generiert Instagram Caption und Hashtags basierend auf dem Storyboard
+ */
+export async function generateInstagramCaptionAndHashtags(
+  storyboard: Array<{ text: string; scene: string }>,
+  storyTitle?: string
+): Promise<{ caption: string; hashtags: string }> {
+  logger.apiCall('gemini-2.5-flash-preview-09-2025', 'generateInstagramCaptionAndHashtags')
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-preview-09-2025' })
+
+    // Erstelle Zusammenfassung der Story für den Prompt
+    const storyContext = storyboard.map((panel, i) =>
+      `Panel ${i + 1}: "${panel.text}"`
+    ).join('\n')
+
+    const prompt = `Du bist ein Social Media Experte für Instagram im Mental Health / Therapie Bereich mit psychologischem Hintergrundwissen.
+
+STORY-KONTEXT:
+${storyTitle ? `Titel: ${storyTitle}\n` : ''}
+${storyContext}
+
+AUFGABE:
+Erstelle eine informative, wertvolle Instagram Caption und Hashtags für dieses Comic-Karussell.
+
+CAPTION-ANFORDERUNGEN:
+
+**STRUKTUR (8-12 Sätze):**
+1. **Hook (1-2 Sätze)**: Relatable Einstieg, macht neugierig
+2. **Story-Kontext (2-3 Sätze)**: Bezug zum Comic, persönlicher Einblick
+3. **MINI-THEORIE-TEIL (3-5 Sätze)**:
+   - Erkläre relevante Fachbegriffe verständlich (z.B. "Co-Regulation", "Hochsensibilität", "Grenzen setzen")
+   - Gib psychologischen Kontext
+   - Mache Zusammenhänge klar
+   - Nutze Absätze für bessere Lesbarkeit
+4. **Buchtipp (OPTIONAL, 1-2 Sätze)**:
+   - Nur wenn es ein passendes Buch zum Thema gibt
+   - Format: "📚 Buchtipp: [Titel] von [Autor/in]"
+   - Kurz erklären warum das Buch hilfreich ist
+5. **Call-to-Action (1 Satz)**: Frage an Community oder Reflection-Prompt
+
+**TON & STIL:**
+- Authentisch, warm, professionell aber zugänglich
+- Nicht zu therapeutisch-formell, aber auch nicht zu casual
+- Bildungsorientiert: Vermittle Wissen verständlich
+- Nutze Absätze (\\n\\n) für Struktur und Lesbarkeit
+- Zielgruppe: Hochsensible Menschen, Mental Health Community, Menschen die mehr lernen wollen
+
+**BEISPIEL-CAPTION:**
+"Kennst du das Gefühl, wenn alles zu viel wird? Mir passiert das regelmäßig – und ich bin Therapeutin. 😅
+
+In solchen Momenten hilft mir Co-Regulation: Das ist die Fähigkeit, gemeinsam mit einer vertrauten Person wieder in Balance zu kommen. Unser Nervensystem kann sich am Nervensystem eines anderen Menschen "orientieren" und dadurch beruhigen.
+
+📚 Buchtipp: "Polyvagal-Theorie" von Stephen Porges erklärt, warum soziale Verbindung so heilsam ist.
+
+💭 Wer ist deine "sichere Basis", wenn alles zu viel wird?"
+
+HASHTAG-ANFORDERUNGEN:
+- 20-25 Hashtags
+- Mix aus großen (#mentalhealth), mittleren (#hochsensibel) und Nischen-Hashtags
+- Relevant für Hochsensibilität, Grenzen setzen, Selbstfürsorge, Therapie
+- Deutsche und englische Hashtags gemischt
+- Format: Alle Hashtags in einer Zeile, durch Leerzeichen getrennt
+
+AUSGABEFORMAT (exakt so):
+CAPTION:
+[deine Caption hier mit \\n\\n für Absätze]
+
+HASHTAGS:
+[alle Hashtags in einer Zeile]
+
+WICHTIG: Keine Erklärungen, keine Markdown-Formatierung, nur Caption und Hashtags wie oben beschrieben.`
+
+    const result = await model.generateContent(prompt)
+    const response = result.response.text().trim()
+
+    // Parse Response
+    const captionMatch = response.match(/CAPTION:\s*\n([\s\S]+?)\n\nHASHTAGS:/i)
+    const hashtagsMatch = response.match(/HASHTAGS:\s*\n(.+)/i)
+
+    const caption = captionMatch ? captionMatch[1].trim() : ''
+    const hashtags = hashtagsMatch ? hashtagsMatch[1].trim() : ''
+
+    logger.apiResponse('gemini-2.5-flash-preview-09-2025', 200, {
+      captionLength: caption.length,
+      hashtagCount: hashtags.split(' ').length
+    })
+
+    logger.info('Instagram Caption & Hashtags generiert', {
+      component: 'ChatHelper',
+      data: {
+        captionLength: caption.length,
+        hashtagCount: hashtags.split(' ').filter(h => h.startsWith('#')).length
+      }
+    })
+
+    return { caption, hashtags }
+
+  } catch (error) {
+    logger.error('Fehler bei Caption/Hashtag-Generierung', {
+      component: 'ChatHelper',
+      data: error
+    })
+
+    // Fallback: Einfache Caption + Standard-Hashtags
+    return {
+      caption: storyTitle || 'Neue Story 💙\n\nKennst du das?\n\n💭 Wie geht es dir damit?',
+      hashtags: '#hochsensibel #hsp #mentalhealth #selfcare #psychologie #grenzensetzen #selbstfürsorge #therapy #mentalhealthawareness #emotions #feelings #boundaries #mindfulness #achtsamkeit #emotionalhealth #sensitive #empathisch #innerearbeit #healing #mentalwellness'
+    }
   }
 }

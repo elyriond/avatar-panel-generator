@@ -50,10 +50,10 @@ async function createPanelCanvas(panel: ApprovedPanel): Promise<HTMLCanvasElemen
 }
 
 /**
- * Exportiert ein einzelnes Panel als PNG Blob
+ * Exportiert ein einzelnes Panel als JPEG Blob (kleinere Dateigröße)
  */
 export async function exportPanelAsPNG(panel: ApprovedPanel): Promise<Blob> {
-  logger.info('Exportiere Panel als PNG', {
+  logger.info('Exportiere Panel als JPEG', {
     component: 'PanelExporter',
     data: { panelId: panel.id }
   })
@@ -65,21 +65,21 @@ export async function exportPanelAsPNG(panel: ApprovedPanel): Promise<Blob> {
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            logger.info('Panel erfolgreich als PNG exportiert', {
+            logger.info('Panel erfolgreich als JPEG exportiert', {
               component: 'PanelExporter',
               data: { panelId: panel.id, size: blob.size }
             })
             resolve(blob)
           } else {
-            reject(new Error('PNG Blob konnte nicht erstellt werden'))
+            reject(new Error('JPEG Blob konnte nicht erstellt werden'))
           }
         },
-        'image/png',
-        1.0  // Maximale Qualität
+        'image/jpeg',
+        0.92  // 92% Qualität - perfekter Kompromiss zwischen Qualität und Größe
       )
     })
   } catch (error) {
-    logger.error('Fehler beim Exportieren als PNG', {
+    logger.error('Fehler beim Exportieren als JPEG', {
       component: 'PanelExporter',
       data: error
     })
@@ -102,24 +102,25 @@ export async function exportPanelsAsZip(panels: ApprovedPanel[]): Promise<Blob> 
 
     const zip = new JSZip()
 
-    // Alle Panels als PNG in ZIP hinzufügen
+    // Alle Panels als JPEG in ZIP hinzufügen
     for (let i = 0; i < panels.length; i++) {
       const panel = panels[i]
-      const pngBlob = await exportPanelAsPNG(panel)
+      const jpegBlob = await exportPanelAsPNG(panel)
       const paddedNumber = String(i + 1).padStart(2, '0')
-      zip.file(`panel-${paddedNumber}.png`, pngBlob)
+      zip.file(`panel-${paddedNumber}.jpg`, jpegBlob)
     }
 
     // Metadaten-Datei hinzufügen
     const metadata = {
       exportedAt: new Date().toISOString(),
       panelCount: panels.length,
+      format: 'JPEG (92% quality)',
       panels: panels.map((p, i) => ({
         index: i + 1,
-        filename: `panel-${String(i + 1).padStart(2, '0')}.png`,
+        filename: `panel-${String(i + 1).padStart(2, '0')}.jpg`,
         panelText: p.panelText,
         imagePrompt: p.imagePrompt,
-        generatedAt: p.generatedAt
+        generatedAt: p.generatedAt instanceof Date ? p.generatedAt.toISOString() : p.generatedAt
       }))
     }
 

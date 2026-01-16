@@ -3,10 +3,10 @@ import { Send, Loader2, Sparkles, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { startChatSession, sendChatMessage, generatePanelsFromChat, type ChatMessage, type PanelData } from '@/lib/chat-helper'
+import { startChatSession, sendChatMessage, generatePanelsFromChat, generateInstagramCaptionAndHashtags, type ChatMessage, type PanelData } from '@/lib/chat-helper'
 import { type ChatSession, addMessageToSession, updateChatSession } from '@/lib/chat-persistence'
 import { type CharacterProfile, generateSystemPromptWithProfile } from '@/lib/character-profile'
-import { generateCompleteStory, regenerateSinglePanel, estimateGenerationTime, type PanelGenerationProgress } from '@/lib/story-generator'
+import { generateCompleteStory, regenerateSinglePanel, editPanelWithImageToImage, estimateGenerationTime, type PanelGenerationProgress } from '@/lib/story-generator'
 import { createStory, type ComicStory } from '@/lib/story-persistence'
 import { StoryPreview } from '@/components/StoryPreview'
 import { logger } from '@/lib/logger'
@@ -45,10 +45,17 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
   const [storyProgress, setStoryProgress] = useState<PanelGenerationProgress | null>(null)
   const [generatedStory, setGeneratedStory] = useState<Omit<import('@/lib/story-persistence').StoryPanel, 'id' | 'generatedAt'>[] | null>(null)
   const [showStoryPreview, setShowStoryPreview] = useState(false)
+  const [instagramCaption, setInstagramCaption] = useState<string | undefined>()
+  const [instagramHashtags, setInstagramHashtags] = useState<string | undefined>()
 
   // Panel-Edit States
   const [editingPanelIndex, setEditingPanelIndex] = useState<number | null>(null)
   const [isRegeneratingPanel, setIsRegeneratingPanel] = useState(false)
+  const [comparisonMode, setComparisonMode] = useState<{
+    panelIndex: number
+    oldPanel: Omit<import('@/lib/story-persistence').StoryPanel, 'id' | 'generatedAt'>
+    newPanel: Omit<import('@/lib/story-persistence').StoryPanel, 'id' | 'generatedAt'>
+  } | null>(null)
 
   // Prüfen ob die letzte Nachricht ein Storyboard ist
   const lastMessage = messages[messages.length - 1]
@@ -183,7 +190,7 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
     setError(null)
 
     try {
-      // Hole das Storyboard aus dem Chat
+      // Hole das Storyboard aus dem Chat für allPanelData (Kontext)
       const storyboardMsg = messages.find(m => isStoryboardMessage(m.content))
       if (!storyboardMsg) {
         setError('Storyboard nicht gefunden. Bitte generiere die Story neu.')
@@ -194,10 +201,18 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
         storyboardMsg.content.replace(/```json\n?|\n?```/g, '').trim()
       )
 
-      // Regeneriere NUR dieses eine Panel
+      // WICHTIG: Nutze die AKTUELLE Scene Description aus dem generierten Panel
+      // (nicht die ursprüngliche aus dem Storyboard)
+      const currentPanel = generatedStory[panelIndex]
+      const currentPanelData: PanelData = {
+        text: currentPanel.panelText,
+        scene: currentPanel.sceneDescription  // Aktuelle Scene (mit vorherigen Edits)
+      }
+
+      // Regeneriere NUR dieses eine Panel mit aktueller Scene + neuem Feedback
       const updatedPanel = await regenerateSinglePanel(
         panelIndex,
-        panelDataList[panelIndex],
+        currentPanelData,  // Nutze aktuelle Version statt Original
         panelDataList,
         characterProfile,
         '#e8dfd0',
@@ -308,6 +323,31 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
       setGeneratedStory(storyPanels)
       setShowStoryPreview(true)
 
+      // Generiere Instagram Caption & Hashtags im Hintergrund
+      try {
+        logger.info('Generiere Instagram Caption & Hashtags im Hintergrund...', {
+          component: 'ChatInterface'
+        })
+
+        const instagram = await generateInstagramCaptionAndHashtags(panelDataList, suggestedTitle)
+        setInstagramCaption(instagram.caption)
+        setInstagramHashtags(instagram.hashtags)
+
+        logger.info('Instagram Content generiert', {
+          component: 'ChatInterface',
+          data: {
+            captionLength: instagram.caption.length,
+            hashtagCount: instagram.hashtags.split(' ').filter(h => h.startsWith('#')).length
+          }
+        })
+      } catch (error) {
+        logger.warn('Konnte Instagram Content nicht im Hintergrund generieren', {
+          component: 'ChatInterface',
+          data: error
+        })
+        // Nicht kritisch - Story ist trotzdem nutzbar
+      }
+
     } catch (err) {
       console.error('Fehler bei Bild-Generierung:', err)
       setError(`Fehler bei Bild-Generierung: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`)
@@ -319,50 +359,370 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
 
   const handleStoryApprove = async (title: string, description?: string) => {
     if (!generatedStory || !characterProfile) return
-    // ... (Logik bleibt gleich, siehe Originaldatei) ...
-    // Ich kopiere die Logik aus der Originaldatei um Platz zu sparen, da sie sich nicht geändert hat
+
+    logger.userAction('ChatInterface', 'approve_story', {
+      title,
+      panelCount: generatedStory.length
+    })
+
     try {
+      // Extrahiere das Storyboard aus den Chat-Messages
+      const storyboardMsg = messages.find(m => isStoryboardMessage(m.content))
+      let originalStoryboard: Array<{ text: string; scene: string }>| undefined
+
+      if (storyboardMsg) {
+        try {
+          originalStoryboard = JSON.parse(
+            storyboardMsg.content.replace(/```json\n?|\n?```/g, '').trim()
+          )
+          logger.info('Storyboard aus Chat extrahiert', {
+            component: 'ChatInterface',
+            data: { panelCount: originalStoryboard?.length }
+          })
+        } catch (e) {
+          logger.warn('Konnte Storyboard nicht extrahieren', {
+            component: 'ChatInterface',
+            data: e
+          })
+        }
+      }
+
+      // Nutze bereits generierte Instagram Caption & Hashtags (aus dem State)
       const story = await createStory(generatedStory, {
         title,
         description,
         characterProfileId: characterProfile.id,
         chatSessionId: session.id,
-        tags: []
+        tags: [],
+        originalStoryboard,        // Speichere das Storyboard mit
+        instagramCaption,          // Aus State (bereits generiert)
+        instagramHashtags          // Aus State (bereits generiert)
       })
+
+      // Alle Story-bezogenen States zurücksetzen
       setShowStoryPreview(false)
       setGeneratedStory(null)
+      setInstagramCaption(undefined)
+      setInstagramHashtags(undefined)
+      setEditingPanelIndex(null)
+      setIsRegeneratingPanel(false)
+      setStoryProgress(null)
+
+      // Erfolgs-Nachricht im Chat
+      const successMessage: ChatMessage = {
+        role: 'assistant',
+        content: `✅ Story "${title}" wurde erfolgreich gespeichert! Du findest sie in der Galerie.`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+      // In Session speichern
+      const updatedSession = addMessageToSession(session.id, successMessage)
+      if (updatedSession) {
+        onSessionUpdated(updatedSession)
+      }
+
+      // Callback für Parent (wechselt zur Galerie)
       onStoryCreated?.(story)
     } catch (error) {
+      logger.error('Fehler beim Speichern der Story', {
+        component: 'ChatInterface',
+        data: error
+      })
       setError('Story konnte nicht gespeichert werden.')
     }
   }
 
   const handleStoryReject = () => {
+    logger.userAction('ChatInterface', 'reject_story', {
+      panelCount: generatedStory?.length || 0
+    })
+
+    // Alle Story-bezogenen States zurücksetzen
     setShowStoryPreview(false)
     setGeneratedStory(null)
+    setInstagramCaption(undefined)
+    setInstagramHashtags(undefined)
+    setEditingPanelIndex(null)
+    setIsRegeneratingPanel(false)
+    setStoryProgress(null)
+
+    // Bestätigungs-Nachricht im Chat
+    const confirmMessage: ChatMessage = {
+      role: 'assistant',
+      content: '❌ Story verworfen. Du kannst jetzt eine neue Story erstellen.',
+      timestamp: new Date()
+    }
+    setMessages(prev => [...prev, confirmMessage])
+
+    // In Session speichern
+    const updatedSession = addMessageToSession(session.id, confirmMessage)
+    if (updatedSession) {
+      onSessionUpdated(updatedSession)
+    }
+  }
+
+  // Regeneriere Story mit gespeichertem Storyboard
+  const handleRegenerateFromStoryboard = async () => {
+    if (!characterProfile) return
+
+    logger.userAction('ChatInterface', 'regenerate_from_storyboard')
+
+    // Storyboard aus Messages holen
+    const storyboardMsg = messages.find(m => isStoryboardMessage(m.content))
+    if (!storyboardMsg) {
+      setError('Storyboard nicht gefunden. Bitte generiere eine neue Story.')
+      return
+    }
+
+    const panelDataList: PanelData[] = JSON.parse(
+      storyboardMsg.content.replace(/```json\n?|\n?```/g, '').trim()
+    )
+
+    // Preview schließen, Generierung starten
+    setShowStoryPreview(false)
+    setIsGeneratingPanels(true)
+    setIsGeneratingStory(true)
+    setError(null)
+    setStoryProgress(null)
+
+    try {
+      // Info-Nachricht
+      const infoMessage: ChatMessage = {
+        role: 'assistant',
+        content: '♻️ Generiere Story neu mit dem gespeicherten Storyboard...',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, infoMessage])
+
+      // Komplette Story neu generieren
+      const storyPanels = await generateCompleteStory(
+        panelDataList,
+        characterProfile,
+        '#e8dfd0',
+        (progress) => {
+          setStoryProgress(progress)
+        }
+      )
+
+      setGeneratedStory(storyPanels)
+      setShowStoryPreview(true)
+
+      // Erfolg-Nachricht
+      const successMessage: ChatMessage = {
+        role: 'assistant',
+        content: `✅ Story mit ${storyPanels.length} Panels erfolgreich neu generiert aus Storyboard!`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+    } catch (err) {
+      console.error('Fehler bei Storyboard-Regenerierung:', err)
+      setError(`Fehler bei Storyboard-Regenerierung: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`)
+    } finally {
+      setIsGeneratingPanels(false)
+      setIsGeneratingStory(false)
+      setStoryProgress(null)
+    }
   }
 
   // Panel-Edit-Handler
-  const handlePanelEditRequest = (panelIndex: number) => {
-    logger.userAction('ChatInterface', 'request_panel_edit', {
+  const handleRegenerateAllPanels = async () => {
+    if (!characterProfile) return
+
+    logger.userAction('ChatInterface', 'regenerate_all_panels')
+
+    // Storyboard aus Messages holen
+    const storyboardMsg = messages.find(m => isStoryboardMessage(m.content))
+    if (!storyboardMsg) {
+      setError('Storyboard nicht gefunden. Bitte generiere die Story neu.')
+      return
+    }
+
+    const panelDataList: PanelData[] = JSON.parse(
+      storyboardMsg.content.replace(/```json\n?|\n?```/g, '').trim()
+    )
+
+    // Preview schließen, Generierung starten
+    setShowStoryPreview(false)
+    setIsGeneratingPanels(true)
+    setIsGeneratingStory(true)
+    setError(null)
+    setStoryProgress(null)
+
+    try {
+      // Info-Nachricht
+      const infoMessage: ChatMessage = {
+        role: 'assistant',
+        content: '🔄 Generiere komplette Story neu mit denselben Texten...',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, infoMessage])
+
+      // Komplette Story neu generieren
+      const storyPanels = await generateCompleteStory(
+        panelDataList,
+        characterProfile,
+        '#e8dfd0',
+        (progress) => {
+          setStoryProgress(progress)
+        }
+      )
+
+      setGeneratedStory(storyPanels)
+      setShowStoryPreview(true)
+
+      // Erfolg-Nachricht
+      const successMessage: ChatMessage = {
+        role: 'assistant',
+        content: `✅ Story mit ${storyPanels.length} Panels erfolgreich neu generiert!`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMessage])
+
+    } catch (err) {
+      console.error('Fehler bei Neu-Generierung:', err)
+      setError(`Fehler bei Neu-Generierung: ${err instanceof Error ? err.message : 'Unbekannter Fehler'}`)
+    } finally {
+      setIsGeneratingPanels(false)
+      setIsGeneratingStory(false)
+      setStoryProgress(null)
+    }
+  }
+
+  const handlePanelEditRequest = async (panelIndex: number, userPrompt: string) => {
+    if (!generatedStory || !characterProfile) return
+
+    logger.userAction('ChatInterface', 'chat_panel_edit', {
+      panelIndex,
+      promptLength: userPrompt.length
+    })
+
+    setIsRegeneratingPanel(true)
+
+    try {
+      const oldPanel = generatedStory[panelIndex]
+
+      // Image-to-Image Editing: Verwende aktuelles Panel-Bild als Basis
+      const updatedPanel = await editPanelWithImageToImage(
+        oldPanel.avatarBase64,
+        userPrompt,
+        characterProfile,
+        oldPanel.panelText,
+        oldPanel.backgroundColor
+      )
+
+      // Zeige Comparison Dialog
+      setComparisonMode({
+        panelIndex,
+        oldPanel,
+        newPanel: updatedPanel
+      })
+
+      logger.info('Panel erfolgreich via Image-to-Image editiert - warte auf User-Auswahl', {
+        component: 'ChatInterface',
+        data: { panelIndex }
+      })
+
+    } catch (error) {
+      logger.error('Fehler beim Bearbeiten des Panels', {
+        component: 'ChatInterface',
+        data: error
+      })
+      alert('Fehler beim Regenerieren des Panels. Bitte versuche es erneut.')
+    } finally {
+      setIsRegeneratingPanel(false)
+    }
+  }
+
+  const handlePanelReroll = async (panelIndex: number) => {
+    if (!generatedStory || !characterProfile) return
+
+    logger.userAction('ChatInterface', 'chat_panel_reroll', {
       panelIndex
     })
 
-    // Zurück zum Chat, Edit-Modus aktivieren
-    setEditingPanelIndex(panelIndex)
-    setShowStoryPreview(false)
+    setIsRegeneratingPanel(true)
 
-    // Panel-Bild für Referenz holen
-    const panelImage = generatedStory?.[panelIndex]?.avatarBase64
+    try {
+      const oldPanel = generatedStory[panelIndex]
 
-    // Hinweis-Nachricht im Chat MIT Panel-Bild
-    const hintMessage: ChatMessage = {
-      role: 'assistant',
-      content: `Du möchtest Panel ${panelIndex + 1} überarbeiten. Schau dir das Panel oben an und beschreibe mir, was anders sein soll (z.B. "bitte fröhlicher aussehen" oder "hellerer Hintergrund").`,
-      timestamp: new Date(),
-      image: panelImage  // Zeige das Panel zur Referenz
+      // Sweet Spot Prompt: Comic-Stil beibehalten, aber Character ähnlicher machen
+      const improvedReferenceFeedback =
+        "Regenerate this comic panel illustration with the same composition, pose, and scene. " +
+        "CRITICAL: This MUST remain a comic illustration - NOT a photograph, NOT realistic. " +
+        "Improve the character's facial features to better match the reference images: " +
+        "adjust facial structure, eye shape, nose proportions, and glasses style to be more similar to references. " +
+        "Maintain the illustrated comic art style with clean lines and soft shading. " +
+        "Keep all text, speech bubbles, and panel elements exactly as they are."
+
+      // Image-to-Image Reroll mit Sweet-Spot-Prompt
+      // Verwende aktuelles Panel für Komposition, aber betone Character-Improvement
+      const updatedPanel = await editPanelWithImageToImage(
+        oldPanel.avatarBase64,
+        improvedReferenceFeedback,
+        characterProfile,
+        oldPanel.panelText,
+        oldPanel.backgroundColor,
+        false  // Aktuelles Panel MIT verwenden, aber Prompt fokussiert auf Character-Verbesserung
+      )
+
+      // Zeige Comparison Dialog
+      setComparisonMode({
+        panelIndex,
+        oldPanel,
+        newPanel: updatedPanel
+      })
+
+      logger.info('Panel erfolgreich neu gewürfelt - warte auf User-Auswahl', {
+        component: 'ChatInterface',
+        data: { panelIndex }
+      })
+
+    } catch (error) {
+      logger.error('Fehler beim Reroll des Panels', {
+        component: 'ChatInterface',
+        data: error
+      })
+      alert('Fehler beim Neu-Würfeln des Panels. Bitte versuche es erneut.')
+    } finally {
+      setIsRegeneratingPanel(false)
     }
-    setMessages(prev => [...prev, hintMessage])
+  }
+
+  const handleSelectPanel = (panelIndex: number, useNew: boolean) => {
+    if (!generatedStory || !comparisonMode) return
+
+    logger.userAction('ChatInterface', 'select_panel_version', {
+      panelIndex,
+      selectedNew: useNew
+    })
+
+    const selectedPanel = useNew ? comparisonMode.newPanel : comparisonMode.oldPanel
+
+    // Erstelle aktualisierte Story
+    const updatedStoryPanels = generatedStory.map((p, idx) =>
+      idx === panelIndex
+        ? {
+            ...p,
+            panelNumber: p.panelNumber,
+            panelText: selectedPanel.panelText,
+            sceneDescription: selectedPanel.sceneDescription,
+            avatarBase64: selectedPanel.avatarBase64,
+            imagePrompt: selectedPanel.imagePrompt,
+            backgroundColor: selectedPanel.backgroundColor
+          }
+        : p
+    )
+
+    // UI updaten
+    setGeneratedStory(updatedStoryPanels)
+    setComparisonMode(null)
+
+    logger.info(`${useNew ? 'Neue' : 'Alte'} Panel-Version ausgewählt`, {
+      component: 'ChatInterface',
+      data: { panelIndex }
+    })
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -375,6 +735,20 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
   // Wenn Story-Preview angezeigt wird, zeige nur Preview
   if (showStoryPreview && generatedStory) {
     const suggestedTitle = generatedStory[0]?.panelText.slice(0, 50) || 'Neue Story'
+
+    // Extrahiere originalStoryboard aus Messages
+    const storyboardMsg = messages.find(m => isStoryboardMessage(m.content))
+    let originalStoryboard: Array<{ text: string; scene: string }> | undefined
+    if (storyboardMsg) {
+      try {
+        originalStoryboard = JSON.parse(
+          storyboardMsg.content.replace(/```json\n?|\n?```/g, '').trim()
+        )
+      } catch (e) {
+        console.warn('Konnte Storyboard nicht extrahieren:', e)
+      }
+    }
+
     return (
       <StoryPreview
         panels={generatedStory}
@@ -382,6 +756,15 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
         onApprove={handleStoryApprove}
         onReject={handleStoryReject}
         onRequestPanelEdit={handlePanelEditRequest}
+        onRerollPanel={handlePanelReroll}
+        onRegenerateAll={handleRegenerateAllPanels}
+        originalStoryboard={originalStoryboard}
+        onRegenerateFromStoryboard={originalStoryboard ? handleRegenerateFromStoryboard : undefined}
+        isRegenerating={isRegeneratingPanel}
+        instagramCaption={instagramCaption}
+        instagramHashtags={instagramHashtags}
+        comparisonMode={comparisonMode || undefined}
+        onSelectPanel={handleSelectPanel}
       />
     )
   }
@@ -450,7 +833,10 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
             <Card className="bg-primary/10">
               <CardContent className="p-3 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <p className="text-sm font-medium">Regeneriere Panel mit deinem Feedback...</p>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">🤖 KI interpretiert dein Feedback...</p>
+                  <p className="text-xs text-muted-foreground">Erstelle verbesserte Bildanweisungen und regeneriere Panel</p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -523,7 +909,7 @@ export function ChatInterface({ numPanels, session, characterProfile, onPanelsGe
             onKeyPress={handleKeyPress}
             placeholder={
               editingPanelIndex !== null
-                ? `Beschreibe deine Änderungswünsche für Panel ${editingPanelIndex + 1}...`
+                ? `Was möchtest du an Panel ${editingPanelIndex + 1} ändern? (z.B. "mehr lächeln", "heller", "Avatar sieht nicht ähnlich aus")`
                 : "Schreibe deine Nachricht... (Enter zum Senden, Shift+Enter für neue Zeile)"
             }
             rows={2}

@@ -43,6 +43,9 @@ export interface CharacterProfile {
   // Optional: Pfade zu Referenzbildern (werden bei Bedarf geladen, um LocalStorage zu schonen)
   referenceImagePaths?: string[]
 
+  // Physische Beschreibung für Image-Prompts
+  physicalDescription?: string  // Detaillierte Beschreibung: Alter, Haare, Brille, Kleidung, etc.
+
   // AI-Modell für Bildgenerierung (TEST-Feature)
   aiModel?: KieAiModel  // Default: 'nano-banana-pro' (Imagen 4)
 
