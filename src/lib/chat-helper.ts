@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { logger } from './logger'
+import { detectCameraAngle, getAngleGuidance, type CameraAngle } from './angle-detector'
 
 // Raw imports of prompt templates
 import systemPromptTemplate from '../../prompts/system-prompt.txt?raw'
@@ -176,16 +177,16 @@ export async function generatePanelsFromChat(
 }
 
 /**
-
- * Generiert einen detaillierten Image-Prompt für KIE.AI
-
+ * Generiert einen detaillierten Image-Prompt für KIE.AI mit Kamera-Winkel-Erkennung
+ *
+ * @returns Object mit { prompt: string, detectedAngle: CameraAngle }
  */
 
 export async function generateImagePrompt(
   panelData: PanelData,
   previousContext: string = '',
   characterProfiles?: Map<string, any>  // Optional: Character-Profile für Beschreibungen
-): Promise<string> {
+): Promise<{ prompt: string; detectedAngle: CameraAngle }> {
   logger.apiCall('gemini-2.5-flash-preview-09-2025', 'generateImagePrompt', {
     panelTextLength: panelData.text.length,
     sceneDescriptionLength: panelData.scene.length,
@@ -194,6 +195,24 @@ export async function generateImagePrompt(
   })
 
   try {
+    // STEP 1: Detect camera angle from scene description
+    const angleInfo = detectCameraAngle(panelData.scene)
+
+    logger.info(`📐 Detected camera angle: ${angleInfo.angle}`, {
+      component: 'ChatHelper',
+      data: {
+        confidence: angleInfo.confidence,
+        keywords: angleInfo.keywords,
+        scenePreview: panelData.scene.substring(0, 100)
+      }
+    })
+
+    // STEP 2: Get angle guidance text
+    const angleGuidance = getAngleGuidance(angleInfo.angle)
+
+    // STEP 3: Enhance scene description with explicit angle instruction
+    const enhancedScene = `${panelData.scene}\n\n🎥 CAMERA ANGLE: ${angleGuidance}`
+
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash-preview-09-2025',
       generationConfig: { temperature: 0.7 }
@@ -218,10 +237,10 @@ export async function generateImagePrompt(
       characterDescriptions = 'No character information provided.'
     }
 
-    // Template-Variablen ersetzen
+    // Template-Variablen ersetzen (use enhancedScene with angle guidance)
     const prompt = imageGenerationPromptTemplate
       .replace('{{PANEL_TEXT}}', panelData.text)
-      .replace('{{SCENE_DESCRIPTION}}', panelData.scene)
+      .replace('{{SCENE_DESCRIPTION}}', enhancedScene)  // Enhanced with angle!
       .replace('{{PREVIOUS_CONTEXT}}', previousContext || 'None (First Panel)')
       .replace('{{CHARACTER_DESCRIPTIONS}}', characterDescriptions)
 
@@ -229,10 +248,14 @@ export async function generateImagePrompt(
     const imagePromptText = result.response.text().trim()
 
     logger.apiResponse('gemini-2.0-flash-exp', 200, {
-      imagePromptLength: imagePromptText.length
+      imagePromptLength: imagePromptText.length,
+      detectedAngle: angleInfo.angle
     })
 
-    return imagePromptText
+    return {
+      prompt: imagePromptText,
+      detectedAngle: angleInfo.angle
+    }
   } catch (error) {
     logger.error('Fehler beim Generieren des Image-Prompts', {
       component: 'ChatHelper',

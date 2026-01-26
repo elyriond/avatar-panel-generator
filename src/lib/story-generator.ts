@@ -1,6 +1,7 @@
 /**
  * Story Generator
  * Sequential generation of avatars to allow recursive character referencing
+ * Now with angle-aware reference selection for better consistency
  */
 
 import { generateImagePrompt, interpretFeedbackForSceneImprovement, type PanelData } from './chat-helper'
@@ -13,6 +14,8 @@ import type { StoryPanel } from './story-persistence'
 import { logger } from './logger'
 import { uploadImagesToImgbb } from './imgbb-uploader'
 import { getCharacterProfiles } from './character-registry'
+import { loadAngleOrganizedReferences, type AngleOrganizedReferences } from './angle-aware-reference-loader'
+import { selectReferencesForAngle } from './angle-detector'
 
 export interface PanelGenerationProgress {
   currentPanel: number
@@ -25,18 +28,42 @@ export interface PanelGenerationProgress {
 export type ProgressCallback = (progress: PanelGenerationProgress) => void
 
 /**
- * Lädt Referenzbilder für ein Character-Profile
- * Wenn referenceImagePaths gesetzt ist, lädt die Bilder aus public/
- * Für Ben: Spezieller Pfad zu /Avatare/Ben/
+ * Lädt Referenzbilder für ein Character-Profile, organisiert nach Kamera-Winkeln
+ * Neue Logik: Verwendet Dateinamen-basierte Winkel-Erkennung
  */
-async function loadCharacterReferences(profile: CharacterProfile): Promise<string[]> {
-  logger.info(`Lade Referenzbilder für ${profile.name}...`, { component: 'StoryGenerator' })
+async function loadCharacterReferencesOrganized(
+  profile: CharacterProfile
+): Promise<AngleOrganizedReferences> {
+  logger.info(`Lade winkel-organisierte Referenzbilder für ${profile.name}...`, {
+    component: 'StoryGenerator'
+  })
 
   try {
-    // Spezialbehandlung für Ben (liegt in /Avatare/Ben/)
+    // Try angle-organized loading first (new system)
+    const organizedRefs = await loadAngleOrganizedReferences(
+      profile.name,
+      '/reference-images'  // Default folder
+    )
+
+    if (organizedRefs.totalCount > 0) {
+      logger.info(`✅ ${organizedRefs.totalCount} winkel-organisierte Referenzen geladen`, {
+        component: 'StoryGenerator',
+        data: {
+          character: profile.name,
+          angles: Array.from(organizedRefs.referencesByAngle.keys())
+        }
+      })
+      return organizedRefs
+    }
+
+    // Fallback: Load all references the old way (not angle-organized)
+    logger.warn(`Keine winkel-organisierten Referenzen gefunden für ${profile.name}, verwende Fallback`, {
+      component: 'StoryGenerator'
+    })
+
+    // Special handling for Ben (old path)
     if (profile.name === 'Ben') {
       const benImagePath = '/Avatare/Ben/Extreme close-up comic.jpg'
-
       const response = await fetch(benImagePath)
       if (!response.ok) {
         throw new Error(`Konnte Ben's Bild nicht laden: ${response.status}`)
@@ -50,23 +77,40 @@ async function loadCharacterReferences(profile: CharacterProfile): Promise<strin
         reader.readAsDataURL(blob)
       })
 
-      // Upload zu imgbb (nur einmal)
       const urls = await uploadImagesToImgbb([base64])
       const benUrl = urls[0]
 
-      // Verwende dasselbe Bild 4x (maximale Consistency)
-      return [benUrl, benUrl, benUrl, benUrl]
+      // Return as "frontal" angle by default
+      return {
+        characterName: profile.name,
+        referencesByAngle: new Map([['frontal', [benUrl]]]),
+        allReferences: [benUrl],
+        totalCount: 1
+      }
     }
 
-    // Für andere Charaktere: Normale Lade-Logik
-    return await extractReferenceImagesFromProfile(profile)
+    // For other characters: Use extractReferenceImagesFromProfile
+    const allUrls = await extractReferenceImagesFromProfile(profile)
+
+    return {
+      characterName: profile.name,
+      referencesByAngle: new Map([['frontal', allUrls]]),  // Default to frontal
+      allReferences: allUrls,
+      totalCount: allUrls.length
+    }
 
   } catch (error) {
     logger.error(`Fehler beim Laden von ${profile.name}'s Referenzbildern`, {
       component: 'StoryGenerator',
       data: error
     })
-    return []
+
+    return {
+      characterName: profile.name,
+      referencesByAngle: new Map(),
+      allReferences: [],
+      totalCount: 0
+    }
   }
 }
 
@@ -112,22 +156,25 @@ export async function generateCompleteStory(
     characterProfiles.map(profile => [profile.name, profile])
   )
 
-  // Lade und cache Referenzbilder für alle Charaktere
-  const characterReferencesMap = new Map<string, string[]>()
+  // Lade und cache Referenzbilder für alle Charaktere (ANGLE-ORGANIZED!)
+  const characterReferencesMap = new Map<string, AngleOrganizedReferences>()
 
   for (const profile of characterProfiles) {
-    logger.info(`Lade Referenzen für ${profile.name}...`, { component: 'StoryGenerator' })
-    const refs = await loadCharacterReferences(profile)
-    characterReferencesMap.set(profile.name, refs)
+    logger.info(`Lade winkel-organisierte Referenzen für ${profile.name}...`, {
+      component: 'StoryGenerator'
+    })
+    const organizedRefs = await loadCharacterReferencesOrganized(profile)
+    characterReferencesMap.set(profile.name, organizedRefs)
   }
 
-  logger.info('✅ Alle Character-Referenzen gecached', {
+  logger.info('✅ Alle Character-Referenzen gecached (winkel-organisiert)', {
     component: 'StoryGenerator',
     data: {
       characters: Array.from(characterReferencesMap.keys()),
       refCounts: Array.from(characterReferencesMap.entries()).map(([name, refs]) => ({
         name,
-        count: refs.length
+        totalCount: refs.totalCount,
+        angles: Array.from(refs.referencesByAngle.keys())
       }))
     }
   })
@@ -157,30 +204,45 @@ export async function generateCompleteStory(
         .map((p, idx) => `Panel ${idx + 1}: ${p.scene}`)
         .join('\n')
 
-      // Generiere Image-Prompt MIT Character-Profilen
-      const imagePrompt = await generateImagePrompt(
+      // Generiere Image-Prompt MIT Character-Profilen UND Winkel-Erkennung
+      const { prompt: imagePrompt, detectedAngle } = await generateImagePrompt(
         panelData,
         previousContext,
         characterProfileMap  // Übergebe Character-Profile für Beschreibungen
       )
 
-      // Sammle Referenzbilder für alle Charaktere in diesem Panel
+      logger.info(`📐 Panel ${panelNumber}: Detected angle = ${detectedAngle}`, {
+        component: 'StoryGenerator'
+      })
+
+      // Sammle ANGLE-SPECIFIC Referenzbilder für alle Charaktere in diesem Panel
       const panelCharacters = panelData.characters || ['Theresa'] // Fallback auf Theresa
       let activeRefs: string[] = []
 
       for (const charName of panelCharacters) {
-        const refs = characterReferencesMap.get(charName)
-        if (refs && refs.length > 0) {
-          activeRefs.push(...refs)
+        const organizedRefs = characterReferencesMap.get(charName)
+        if (organizedRefs && organizedRefs.totalCount > 0) {
+          // NEW: Select angle-appropriate references!
+          const angleRefs = selectReferencesForAngle(
+            detectedAngle,
+            organizedRefs.referencesByAngle,
+            3  // Max 3 refs per character per angle
+          )
+          activeRefs.push(...angleRefs)
+
+          logger.debug(`Selected ${angleRefs.length} angle-specific refs for ${charName}`, {
+            component: 'StoryGenerator',
+            data: { angle: detectedAngle }
+          })
         }
       }
 
       // Limit auf 8 Bilder (KIE.AI Max)
       activeRefs = activeRefs.slice(0, 8)
 
-      logger.debug(`Panel ${panelNumber}: ${panelCharacters.join(' + ')} (${activeRefs.length} refs)`, {
+      logger.info(`Panel ${panelNumber}: ${panelCharacters.join(' + ')} | Angle: ${detectedAngle} | Refs: ${activeRefs.length}`, {
         component: 'StoryGenerator',
-        data: { characters: panelCharacters }
+        data: { characters: panelCharacters, angle: detectedAngle }
       })
 
       // Hole AI-Modell vom ersten Character-Profile (oder default)
@@ -317,19 +379,38 @@ export async function regenerateSinglePanel(
     characterProfiles.map(profile => [profile.name, profile])
   )
 
-  const imagePrompt = await generateImagePrompt(
+  // Generate image prompt with angle detection
+  const { prompt: imagePrompt, detectedAngle } = await generateImagePrompt(
     { text: panelData.text, scene: sceneDescription, characters: panelCharacters },
     previousContext,
     characterProfileMap
   )
 
-  // Sammle Referenzen für alle Charaktere
+  logger.info(`📐 Regenerating panel ${panelNumber}: Detected angle = ${detectedAngle}`, {
+    component: 'StoryGenerator'
+  })
+
+  // Sammle ANGLE-SPECIFIC Referenzen für alle Charaktere
   let referenceUrls: string[] = []
   for (const charName of panelCharacters) {
     const profile = characterProfileMap.get(charName)
     if (profile) {
-      const refs = await loadCharacterReferences(profile)
-      referenceUrls.push(...refs)
+      const organizedRefs = await loadCharacterReferencesOrganized(profile)
+
+      if (organizedRefs.totalCount > 0) {
+        // Select angle-appropriate references
+        const angleRefs = selectReferencesForAngle(
+          detectedAngle,
+          organizedRefs.referencesByAngle,
+          3  // Max 3 refs per character
+        )
+        referenceUrls.push(...angleRefs)
+
+        logger.debug(`Selected ${angleRefs.length} angle-specific refs for ${charName}`, {
+          component: 'StoryGenerator',
+          data: { angle: detectedAngle }
+        })
+      }
     }
   }
 
@@ -492,9 +573,10 @@ export async function editPanelWithImageToImage(
 }
 
 export async function generateImagePromptsForStory(panelDataList: PanelData[]): Promise<string[]> {
-  const promises = panelDataList.map((panelData, index) => {
+  const promises = panelDataList.map(async (panelData, index) => {
     const previousContext = panelDataList.slice(0, index).map((p, i) => `Panel ${i + 1}: ${p.scene}`).join('\n')
-    return generateImagePrompt(panelData, previousContext)
+    const { prompt } = await generateImagePrompt(panelData, previousContext)
+    return prompt
   })
   return Promise.all(promises)
 }
